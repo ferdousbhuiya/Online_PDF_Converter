@@ -1,0 +1,1159 @@
+"""
+PDFMaster Pro - Complete PDF Converter Web Application
+Author: AI Assistant
+Date: July 27, 2026
+"""
+
+import os
+import uuid
+import shutil
+import threading
+import time
+from datetime import datetime
+from dotenv import load_dotenv
+from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, flash
+from werkzeug.utils import secure_filename
+from config import Config
+import smtplib
+from email.message import EmailMessage
+
+# Load .env file
+load_dotenv()
+
+
+# PDF Libraries
+from pypdf import PdfReader, PdfWriter, PdfMerger
+from PyPDF2 import PdfFileMerger
+import pdfplumber
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from PIL import Image
+import img2pdf
+from pdf2docx import Converter as PDF2DOCXConverter
+import openpyxl
+from docx import Document
+from docx.shared import Inches, Pt
+from pptx import Presentation
+from pptx.util import Inches as PptxInches
+
+# Initialize Flask App
+app = Flask(__name__)
+app.config.from_object(Config)
+
+# Email Configuration (You will set these up in Step 4)
+EMAIL_ADDRESS = os.environ.get('EMAIL_ADDRESS', 'your_email@gmail.com')
+EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', 'your_gmail_app_password')
+
+# Create necessary directories
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
+
+# ============================================
+# HELPER FUNCTIONS
+# ============================================
+
+# Helper function to get proper accept attribute for file inputs
+def get_accept_attribute(input_type):
+    """Returns proper MIME types and extensions for file input accept attribute."""
+    accept_types = {
+        'pdf': ['.pdf', 'application/pdf'],
+        'word': ['.doc', '.docx', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        'excel': ['.xls', '.xlsx', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        'powerpoint': ['.ppt', '.pptx', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+        'image': ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', 'image/*'],
+        'html': ['.html', '.htm', 'text/html']
+    }
+    
+    types = accept_types.get(input_type, ['*/*'])
+    return ','.join(types)
+
+# Make it available in templates
+app.jinja_env.globals.update(get_accept_attribute=get_accept_attribute)
+
+
+
+
+def allowed_file(filename, category):
+    """Check if file extension is allowed for the given category."""
+    if '.' not in filename:
+        return False
+    ext = filename.rsplit('.', 1)[1].lower()
+    return ext in app.config['ALLOWED_EXTENSIONS'].get(category, [])
+
+def get_unique_filename():
+    """Generate unique filename."""
+    return f"{uuid.uuid4().hex}_{int(time.time())}"
+
+def cleanup_old_files():
+    """Background task to clean up old files."""
+    while True:
+        try:
+            now = time.time()
+            for folder in [app.config['UPLOAD_FOLDER'], app.config['OUTPUT_FOLDER']]:
+                for filename in os.listdir(folder):
+                    filepath = os.path.join(folder, filename)
+                    if os.path.isfile(filepath):
+                        if now - os.path.getmtime(filepath) > app.config['CLEANUP_INTERVAL']:
+                            os.remove(filepath)
+        except Exception as e:
+            print(f"Cleanup error: {e}")
+        time.sleep(600)  # Run every 10 minutes
+
+# Start cleanup thread
+cleanup_thread = threading.Thread(target=cleanup_old_files, daemon=True)
+cleanup_thread.start()
+
+# ============================================
+# TOOL DEFINITIONS
+# ============================================
+
+TOOLS = [
+    {'id': 'merge', 'name': 'Merge PDF', 'icon': '🔗', 'color': '#FF6B6B', 
+     'description': 'Combine multiple PDFs into one file', 'category': 'organize',
+     'input': 'pdf', 'multiple': True},
+    
+    {'id': 'split', 'name': 'Split PDF', 'icon': '✂️', 'color': '#4ECDC4',
+     'description': 'Extract pages from PDF into separate files', 'category': 'organize',
+     'input': 'pdf', 'multiple': False},
+    
+    {'id': 'compress', 'name': 'Compress PDF', 'icon': '🗜️', 'color': '#FFE66D',
+     'description': 'Reduce PDF file size while keeping quality', 'category': 'optimize',
+     'input': 'pdf', 'multiple': False},
+    
+    {'id': 'rotate', 'name': 'Rotate PDF', 'icon': '🔄', 'color': '#A8E6CF',
+     'description': 'Rotate PDF pages in any direction', 'category': 'organize',
+     'input': 'pdf', 'multiple': False},
+    
+    {'id': 'unlock', 'name': 'Unlock PDF', 'icon': '🔓', 'color': '#FFD3B6',
+     'description': 'Remove password protection from PDF', 'category': 'security',
+     'input': 'pdf', 'multiple': False},
+    
+    {'id': 'protect', 'name': 'Protect PDF', 'icon': '🔒', 'color': '#C9B1FF',
+     'description': 'Add password protection to PDF', 'category': 'security',
+     'input': 'pdf', 'multiple': False},
+    
+    {'id': 'watermark', 'name': 'Watermark PDF', 'icon': '💧', 'color': '#95E1D3',
+     'description': 'Add text watermark to PDF pages', 'category': 'edit',
+     'input': 'pdf', 'multiple': False},
+    
+    {'id': 'pagenumber', 'name': 'Page Numbers', 'icon': '🔢', 'color': '#F38181',
+     'description': 'Add page numbers to your PDF', 'category': 'edit',
+     'input': 'pdf', 'multiple': False},
+    
+    {'id': 'organize', 'name': 'Organize PDF', 'icon': '📋', 'color': '#AA96DA',
+     'description': 'Reorder, delete or rotate PDF pages', 'category': 'organize',
+     'input': 'pdf', 'multiple': False},
+    
+    {'id': 'pdf_to_word', 'name': 'PDF to Word', 'icon': '📝', 'color': '#4A90E2',
+     'description': 'Convert PDF to editable Word document', 'category': 'convert',
+     'input': 'pdf', 'output': 'docx', 'multiple': False},
+    
+    {'id': 'pdf_to_excel', 'name': 'PDF to Excel', 'icon': '📊', 'color': '#7ED321',
+     'description': 'Extract tables from PDF to Excel', 'category': 'convert',
+     'input': 'pdf', 'output': 'xlsx', 'multiple': False},
+    
+    {'id': 'pdf_to_ppt', 'name': 'PDF to PowerPoint', 'icon': '📽️', 'color': '#F5A623',
+     'description': 'Convert PDF pages to PowerPoint slides', 'category': 'convert',
+     'input': 'pdf', 'output': 'pptx', 'multiple': False},
+    
+    {'id': 'pdf_to_jpg', 'name': 'PDF to JPG', 'icon': '🖼️', 'color': '#BD10E0',
+     'description': 'Convert each PDF page to JPG image', 'category': 'convert',
+     'input': 'pdf', 'output': 'jpg', 'multiple': False},
+    
+    {'id': 'pdf_to_png', 'name': 'PDF to PNG', 'icon': '🎨', 'color': '#50E3C2',
+     'description': 'Convert PDF pages to PNG images', 'category': 'convert',
+     'input': 'pdf', 'output': 'png', 'multiple': False},
+    
+    {'id': 'word_to_pdf', 'name': 'Word to PDF', 'icon': '📄', 'color': '#4A90E2',
+     'description': 'Convert Word documents to PDF', 'category': 'convert',
+     'input': 'word', 'output': 'pdf', 'multiple': True},
+    
+    {'id': 'excel_to_pdf', 'name': 'Excel to PDF', 'icon': '📈', 'color': '#7ED321',
+     'description': 'Convert Excel spreadsheets to PDF', 'category': 'convert',
+     'input': 'excel', 'output': 'pdf', 'multiple': True},
+    
+    {'id': 'ppt_to_pdf', 'name': 'PowerPoint to PDF', 'icon': '📑', 'color': '#F5A623',
+     'description': 'Convert PowerPoint to PDF', 'category': 'convert',
+     'input': 'powerpoint', 'output': 'pdf', 'multiple': True},
+    
+    {'id': 'jpg_to_pdf', 'name': 'JPG to PDF', 'icon': '📷', 'color': '#FF6B6B',
+     'description': 'Convert JPG images to PDF', 'category': 'convert',
+     'input': 'image', 'output': 'pdf', 'multiple': True},
+    
+    {'id': 'png_to_pdf', 'name': 'PNG to PDF', 'icon': '🎭', 'color': '#9B59B6',
+     'description': 'Convert PNG images to PDF', 'category': 'convert',
+     'input': 'image', 'output': 'pdf', 'multiple': True},
+    
+    {'id': 'html_to_pdf', 'name': 'HTML to PDF', 'icon': '🌐', 'color': '#E74C3C',
+     'description': 'Convert HTML files to PDF', 'category': 'convert',
+     'input': 'html', 'output': 'pdf', 'multiple': False},
+    
+    {'id': 'edit_metadata', 'name': 'Edit PDF Metadata', 'icon': '🏷️', 'color': '#3498DB',
+     'description': 'Edit PDF title, author and properties', 'category': 'edit',
+     'input': 'pdf', 'multiple': False},
+    
+    {'id': 'sign', 'name': 'Sign PDF', 'icon': '✍️', 'color': '#1ABC9C',
+     'description': 'Add signature to PDF document', 'category': 'security',
+     'input': 'pdf', 'multiple': False},
+]
+
+# ============================================
+# ROUTES - MAIN PAGES
+# ============================================
+
+@app.route('/')
+def index():
+    """Home page with all tools."""
+    categories = {
+        'organize': {'name': 'Organize PDF', 'tools': []},
+        'convert': {'name': 'Convert PDF', 'tools': []},
+        'edit': {'name': 'Edit PDF', 'tools': []},
+        'optimize': {'name': 'Optimize PDF', 'tools': []},
+        'security': {'name': 'PDF Security', 'tools': []},
+    }
+    
+    for tool in TOOLS:
+        if tool['category'] in categories:
+            categories[tool['category']]['tools'].append(tool)
+    
+    return render_template('index.html', categories=categories, tools=TOOLS)
+
+@app.route('/tool/<tool_id>')
+def tool_page(tool_id):
+    """Individual tool page."""
+    tool = next((t for t in TOOLS if t['id'] == tool_id), None)
+    if not tool:
+        flash('Tool not found', 'error')
+        return redirect(url_for('index'))
+    return render_template('tool.html', tool=tool, all_tools=TOOLS)
+
+# ============================================
+# CONVERSION ROUTES
+# ============================================
+
+@app.route('/convert', methods=['POST'])
+def convert():
+    """Main conversion endpoint - handles all tools."""
+    try:
+        tool_id = request.form.get('tool_id')
+        tool = next((t for t in TOOLS if t['id'] == tool_id), None)
+        
+        if not tool:
+            return jsonify({'success': False, 'error': 'Invalid tool'}), 400
+        
+        # Get uploaded files
+        files = request.files.getlist('files')
+        if not files or files[0].filename == '':
+            return jsonify({'success': False, 'error': 'No files uploaded'}), 400
+        
+        # Save uploaded files
+        session_id = get_unique_filename()
+        upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], session_id)
+        output_dir = os.path.join(app.config['OUTPUT_FOLDER'], session_id)
+        os.makedirs(upload_dir, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        saved_files = []
+        for f in files:
+            if f and f.filename:
+                filename = secure_filename(f.filename)
+                filepath = os.path.join(upload_dir, filename)
+                f.save(filepath)
+                saved_files.append(filepath)
+        
+        # Process based on tool
+        result = process_tool(tool_id, saved_files, output_dir, request.form)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'download_url': result['download_url'],
+                'filename': result['filename'],
+                'message': result.get('message', 'Conversion successful!')
+            })
+        else:
+            return jsonify({'success': False, 'error': result['error']}), 500
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def process_tool(tool_id, files, output_dir, form_data):
+    """Route to appropriate conversion function."""
+    handlers = {
+        'merge': handle_merge_pdf,
+        'split': handle_split_pdf,
+        'compress': handle_compress_pdf,
+        'rotate': handle_rotate_pdf,
+        'unlock': handle_unlock_pdf,
+        'protect': handle_protect_pdf,
+        'watermark': handle_watermark_pdf,
+        'pagenumber': handle_page_numbers,
+        'organize': handle_organize_pdf,
+        'pdf_to_word': handle_pdf_to_word,
+        'pdf_to_excel': handle_pdf_to_excel,
+        'pdf_to_ppt': handle_pdf_to_ppt,
+        'pdf_to_jpg': handle_pdf_to_jpg,
+        'pdf_to_png': handle_pdf_to_png,
+        'word_to_pdf': handle_word_to_pdf,
+        'excel_to_pdf': handle_excel_to_pdf,
+        'ppt_to_pdf': handle_ppt_to_pdf,
+        'jpg_to_pdf': handle_jpg_to_pdf,
+        'png_to_pdf': handle_png_to_pdf,
+        'html_to_pdf': handle_html_to_pdf,
+        'edit_metadata': handle_edit_metadata,
+        'sign': handle_sign_pdf,
+    }
+    
+    handler = handlers.get(tool_id)
+    if not handler:
+        return {'success': False, 'error': 'Handler not implemented'}
+    
+    return handler(files, output_dir, form_data)
+
+# ============================================
+# PDF HANDLERS
+# ============================================
+
+def handle_merge_pdf(files, output_dir, form_data):
+    """Merge multiple PDFs into one."""
+    try:
+        merger = PdfMerger()
+        for pdf_file in files:
+            merger.append(pdf_file)
+        
+        output_file = os.path.join(output_dir, 'merged.pdf')
+        merger.write(output_file)
+        merger.close()
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/merged.pdf',
+            'filename': 'merged.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Merge failed: {str(e)}'}
+
+def handle_split_pdf(files, output_dir, form_data):
+    """Split PDF into individual pages."""
+    try:
+        reader = PdfReader(files[0])
+        output_files = []
+        
+        for i, page in enumerate(reader.pages):
+            writer = PdfWriter()
+            writer.add_page(page)
+            filename = f'page_{i+1}.pdf'
+            output_path = os.path.join(output_dir, filename)
+            with open(output_path, 'wb') as f:
+                writer.write(f)
+            output_files.append(filename)
+        
+        # Create ZIP of all pages
+        import zipfile
+        zip_path = os.path.join(output_dir, 'split_pages.zip')
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            for fname in output_files:
+                zipf.write(os.path.join(output_dir, fname), fname)
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/split_pages.zip',
+            'filename': 'split_pages.zip',
+            'message': f'Split into {len(output_files)} pages'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Split failed: {str(e)}'}
+
+def handle_compress_pdf(files, output_dir, form_data):
+    """Compress PDF by removing unnecessary data."""
+    try:
+        reader = PdfReader(files[0])
+        writer = PdfWriter()
+        
+        for page in reader.pages:
+            writer.add_page(page)
+            # Remove metadata
+            page.compress_content_streams()
+        
+        # Remove metadata
+        writer.add_metadata({})
+        
+        output_file = os.path.join(output_dir, 'compressed.pdf')
+        with open(output_file, 'wb') as f:
+            writer.write(f)
+        
+        original_size = os.path.getsize(files[0])
+        new_size = os.path.getsize(output_file)
+        reduction = ((original_size - new_size) / original_size) * 100
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/compressed.pdf',
+            'filename': 'compressed.pdf',
+            'message': f'Compressed by {reduction:.1f}%'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Compression failed: {str(e)}'}
+
+def handle_rotate_pdf(files, output_dir, form_data):
+    """Rotate PDF pages."""
+    try:
+        angle = int(form_data.get('angle', 90))
+        reader = PdfReader(files[0])
+        writer = PdfWriter()
+        
+        for page in reader.pages:
+            page.rotate(angle)
+            writer.add_page(page)
+        
+        output_file = os.path.join(output_dir, 'rotated.pdf')
+        with open(output_file, 'wb') as f:
+            writer.write(f)
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/rotated.pdf',
+            'filename': 'rotated.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Rotation failed: {str(e)}'}
+
+def handle_unlock_pdf(files, output_dir, form_data):
+    """Remove password from PDF."""
+    try:
+        password = form_data.get('password', '')
+        reader = PdfReader(files[0])
+        
+        if reader.is_encrypted:
+            if not reader.decrypt(password):
+                return {'success': False, 'error': 'Incorrect password'}
+        
+        writer = PdfWriter()
+        for page in reader.pages:
+            writer.add_page(page)
+        
+        output_file = os.path.join(output_dir, 'unlocked.pdf')
+        with open(output_file, 'wb') as f:
+            writer.write(f)
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/unlocked.pdf',
+            'filename': 'unlocked.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Unlock failed: {str(e)}'}
+
+def handle_protect_pdf(files, output_dir, form_data):
+    """Add password protection to PDF."""
+    try:
+        password = form_data.get('password', '')
+        if not password:
+            return {'success': False, 'error': 'Password is required'}
+        
+        reader = PdfReader(files[0])
+        writer = PdfWriter()
+        
+        for page in reader.pages:
+            writer.add_page(page)
+        
+        writer.encrypt(password)
+        
+        output_file = os.path.join(output_dir, 'protected.pdf')
+        with open(output_file, 'wb') as f:
+            writer.write(f)
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/protected.pdf',
+            'filename': 'protected.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Protection failed: {str(e)}'}
+
+def handle_watermark_pdf(files, output_dir, form_data):
+    """Add text watermark to PDF."""
+    try:
+        text = form_data.get('watermark_text', 'CONFIDENTIAL')
+        reader = PdfReader(files[0])
+        writer = PdfWriter()
+        
+        # Create watermark
+        watermark_path = os.path.join(output_dir, 'watermark.pdf')
+        c = canvas.Canvas(watermark_path, pagesize=letter)
+        c.saveState()
+        c.setFont("Helvetica", 60)
+        c.setFillColorRGB(0.5, 0.5, 0.5, alpha=0.3)
+        c.translate(300, 400)
+        c.rotate(45)
+        c.drawCentredString(0, 0, text)
+        c.restoreState()
+        c.save()
+        
+        watermark_reader = PdfReader(watermark_path)
+        watermark_page = watermark_reader.pages[0]
+        
+        for page in reader.pages:
+            page.merge_page(watermark_page)
+            writer.add_page(page)
+        
+        output_file = os.path.join(output_dir, 'watermarked.pdf')
+        with open(output_file, 'wb') as f:
+            writer.write(f)
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/watermarked.pdf',
+            'filename': 'watermarked.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Watermark failed: {str(e)}'}
+
+def handle_page_numbers(files, output_dir, form_data):
+    """Add page numbers to PDF."""
+    try:
+        position = form_data.get('position', 'bottom-center')
+        reader = PdfReader(files[0])
+        writer = PdfWriter()
+        
+        num_pages = len(reader.pages)
+        
+        for i, page in enumerate(reader.pages):
+            # Create page number overlay
+            temp_path = os.path.join(output_dir, f'temp_{i}.pdf')
+            c = canvas.Canvas(temp_path, pagesize=letter)
+            c.setFont("Helvetica", 12)
+            
+            page_num_text = f"Page {i+1} of {num_pages}"
+            
+            if position == 'bottom-center':
+                c.drawCentredString(letter[0]/2, 30, page_num_text)
+            elif position == 'bottom-right':
+                c.drawRightString(letter[0] - 30, 30, page_num_text)
+            elif position == 'top-center':
+                c.drawCentredString(letter[0]/2, letter[1] - 30, page_num_text)
+            
+            c.save()
+            
+            overlay_reader = PdfReader(temp_path)
+            page.merge_page(overlay_reader.pages[0])
+            writer.add_page(page)
+            os.remove(temp_path)
+        
+        output_file = os.path.join(output_dir, 'numbered.pdf')
+        with open(output_file, 'wb') as f:
+            writer.write(f)
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/numbered.pdf',
+            'filename': 'numbered.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Page numbering failed: {str(e)}'}
+
+def handle_organize_pdf(files, output_dir, form_data):
+    """Reorganize PDF pages."""
+    try:
+        page_order = form_data.get('page_order', '')
+        reader = PdfReader(files[0])
+        writer = PdfWriter()
+        
+        if page_order:
+            # Parse page order like "1,3,2,4"
+            pages = [int(p.strip()) - 1 for p in page_order.split(',') if p.strip()]
+            for page_idx in pages:
+                if 0 <= page_idx < len(reader.pages):
+                    writer.add_page(reader.pages[page_idx])
+        else:
+            for page in reader.pages:
+                writer.add_page(page)
+        
+        output_file = os.path.join(output_dir, 'organized.pdf')
+        with open(output_file, 'wb') as f:
+            writer.write(f)
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/organized.pdf',
+            'filename': 'organized.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Organization failed: {str(e)}'}
+
+def handle_pdf_to_word(files, output_dir, form_data):
+    """Convert PDF to Word document."""
+    try:
+        output_file = os.path.join(output_dir, 'converted.docx')
+        cv = PDF2DOCXConverter(files[0])
+        cv.convert(output_file)
+        cv.close()
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/converted.docx',
+            'filename': 'converted.docx'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'PDF to Word failed: {str(e)}'}
+
+def handle_pdf_to_excel(files, output_dir, form_data):
+    """Extract tables from PDF to Excel."""
+    try:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Extracted Data"
+        
+        with pdfplumber.open(files[0]) as pdf:
+            row_num = 1
+            for page_num, page in enumerate(pdf.pages):
+                tables = page.extract_tables()
+                for table in tables:
+                    for row in table:
+                        for col_num, cell in enumerate(row, 1):
+                            ws.cell(row=row_num, column=col_num, value=cell)
+                        row_num += 1
+                    row_num += 1  # Gap between tables
+        
+        output_file = os.path.join(output_dir, 'converted.xlsx')
+        wb.save(output_file)
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/converted.xlsx',
+            'filename': 'converted.xlsx'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'PDF to Excel failed: {str(e)}'}
+
+def handle_pdf_to_ppt(files, output_dir, form_data):
+    """Convert PDF to PowerPoint."""
+    try:
+        prs = Presentation()
+        
+        with pdfplumber.open(files[0]) as pdf:
+            for page in pdf.pages:
+                slide = prs.slides.add_slide(prs.slide_layouts[6])  # Blank layout
+                
+                # Extract text
+                text = page.extract_text() or ""
+                
+                # Add text box
+                left = PptxInches(0.5)
+                top = PptxInches(0.5)
+                width = PptxInches(9)
+                height = PptxInches(7)
+                
+                txBox = slide.shapes.add_textbox(left, top, width, height)
+                tf = txBox.text_frame
+                tf.text = text[:3000]  # Limit text
+        
+        output_file = os.path.join(output_dir, 'converted.pptx')
+        prs.save(output_file)
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/converted.pptx',
+            'filename': 'converted.pptx'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'PDF to PowerPoint failed: {str(e)}'}
+
+def handle_pdf_to_jpg(files, output_dir, form_data):
+    """Convert PDF pages to JPG images."""
+    try:
+        from pdf2image import convert_from_path
+        import zipfile
+        
+        images = convert_from_path(files[0], dpi=150)
+        
+        image_files = []
+        for i, img in enumerate(images):
+            img_path = os.path.join(output_dir, f'page_{i+1}.jpg')
+            img.save(img_path, 'JPEG', quality=90)
+            image_files.append(img_path)
+        
+        # Create ZIP
+        zip_path = os.path.join(output_dir, 'images.zip')
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            for img_path in image_files:
+                zipf.write(img_path, os.path.basename(img_path))
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/images.zip',
+            'filename': 'images.zip',
+            'message': f'Converted {len(images)} pages to JPG'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'PDF to JPG failed: {str(e)}'}
+
+def handle_pdf_to_png(files, output_dir, form_data):
+    """Convert PDF pages to PNG images."""
+    try:
+        from pdf2image import convert_from_path
+        import zipfile
+        
+        images = convert_from_path(files[0], dpi=150)
+        
+        image_files = []
+        for i, img in enumerate(images):
+            img_path = os.path.join(output_dir, f'page_{i+1}.png')
+            img.save(img_path, 'PNG')
+            image_files.append(img_path)
+        
+        zip_path = os.path.join(output_dir, 'images_png.zip')
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            for img_path in image_files:
+                zipf.write(img_path, os.path.basename(img_path))
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/images_png.zip',
+            'filename': 'images_png.zip'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'PDF to PNG failed: {str(e)}'}
+
+def handle_word_to_pdf(files, output_dir, form_data):
+    """Convert Word documents to PDF with proper COM initialization."""
+    try:
+        import os
+        import comtypes.client
+        from comtypes.client import CreateObject
+        
+        # Initialize COM properly
+        comtypes.client.CreateObject("Word.Application")
+        
+        word_app = None
+        try:
+            # Create Word application
+            word_app = CreateObject("Word.Application")
+            word_app.Visible = False
+            
+            if len(files) == 1:
+                # Single file conversion
+                input_file = os.path.abspath(files[0])
+                output_file = os.path.abspath(os.path.join(output_dir, 'converted.pdf'))
+                
+                doc = word_app.Documents.Open(input_file)
+                doc.SaveAs(output_file, FileFormat=17)  # 17 = wdFormatPDF
+                doc.Close()
+            else:
+                # Multiple files - convert each and merge
+                from pypdf import PdfMerger
+                merger = PdfMerger()
+                
+                for i, word_file in enumerate(files):
+                    temp_pdf = os.path.abspath(os.path.join(output_dir, f'temp_{i}.pdf'))
+                    
+                    doc = word_app.Documents.Open(os.path.abspath(word_file))
+                    doc.SaveAs(temp_pdf, FileFormat=17)
+                    doc.Close()
+                    
+                    merger.append(temp_pdf)
+                
+                output_file = os.path.join(output_dir, 'converted.pdf')
+                merger.write(output_file)
+                merger.close()
+                
+                # Clean up temp files
+                for i in range(len(files)):
+                    temp_pdf = os.path.join(output_dir, f'temp_{i}.pdf')
+                    if os.path.exists(temp_pdf):
+                        os.remove(temp_pdf)
+            
+            return {
+                'success': True,
+                'download_url': f'/download/{os.path.basename(output_dir)}/converted.pdf',
+                'filename': 'converted.pdf'
+            }
+        finally:
+            if word_app:
+                word_app.Quit()
+            
+    except ImportError:
+        # Fallback to docx2pdf if comtypes fails
+        try:
+            from docx2pdf import convert
+            import pythoncom
+            import os
+            
+            # Initialize COM for this thread
+            pythoncom.CoInitialize()
+            
+            if len(files) == 1:
+                input_file = files[0]
+                output_file = os.path.join(output_dir, 'converted.pdf')
+                convert(input_file, output_file)
+            else:
+                from pypdf import PdfMerger
+                merger = PdfMerger()
+                
+                for i, word_file in enumerate(files):
+                    temp_pdf = os.path.join(output_dir, f'temp_{i}.pdf')
+                    convert(word_file, temp_pdf)
+                    merger.append(temp_pdf)
+                    
+                output_file = os.path.join(output_dir, 'converted.pdf')
+                merger.write(output_file)
+                merger.close()
+                
+                for i in range(len(files)):
+                    temp_pdf = os.path.join(output_dir, f'temp_{i}.pdf')
+                    if os.path.exists(temp_pdf):
+                        os.remove(temp_pdf)
+            
+            return {
+                'success': True,
+                'download_url': f'/download/{os.path.basename(output_dir)}/converted.pdf',
+                'filename': 'converted.pdf'
+            }
+        except Exception as e:
+            return {'success': False, 'error': f'Word to PDF failed: {str(e)}'}
+        finally:
+            try:
+                pythoncom.CoUninitialize()
+            except:
+                pass
+    except Exception as e:
+        return {'success': False, 'error': f'Word to PDF failed: {str(e)}'}
+
+
+
+    
+def handle_excel_to_pdf(files, output_dir, form_data):
+    """Convert Excel to PDF."""
+    try:
+        output_file = os.path.join(output_dir, 'converted.pdf')
+        c = canvas.Canvas(output_file, pagesize=A4)
+        width, height = A4
+        
+        for excel_file in files:
+            wb = openpyxl.load_workbook(excel_file)
+            
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                y_position = height - 50
+                
+                # Sheet title
+                c.setFont("Helvetica-Bold", 16)
+                c.drawString(50, y_position, sheet_name)
+                y_position -= 30
+                
+                c.setFont("Helvetica", 10)
+                
+                for row in ws.iter_rows(values_only=True):
+                    line = " | ".join([str(cell) if cell is not None else "" for cell in row])
+                    
+                    if y_position < 50:
+                        c.showPage()
+                        c.setFont("Helvetica", 10)
+                        y_position = height - 50
+                    
+                    c.drawString(50, y_position, line[:120])
+                    y_position -= 15
+                
+                c.showPage()
+        
+        c.save()
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/converted.pdf',
+            'filename': 'converted.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Excel to PDF failed: {str(e)}'}
+
+def handle_ppt_to_pdf(files, output_dir, form_data):
+    """Convert PowerPoint to PDF."""
+    try:
+        output_file = os.path.join(output_dir, 'converted.pdf')
+        c = canvas.Canvas(output_file, pagesize=(960, 540))  # 16:9 ratio
+        
+        for ppt_file in files:
+            prs = Presentation(ppt_file)
+            
+            for slide in prs.slides:
+                y_position = 500
+                
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text:
+                        text = shape.text
+                        # Word wrap
+                        words = text.split()
+                        line = ""
+                        for word in words:
+                            test_line = line + word + " "
+                            if c.stringWidth(test_line, "Helvetica", 14) < 900:
+                                line = test_line
+                            else:
+                                c.setFont("Helvetica", 14)
+                                c.drawString(30, y_position, line)
+                                y_position -= 20
+                                line = word + " "
+                        
+                        if line:
+                            c.setFont("Helvetica", 14)
+                            c.drawString(30, y_position, line)
+                            y_position -= 20
+                
+                c.showPage()
+        
+        c.save()
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/converted.pdf',
+            'filename': 'converted.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'PowerPoint to PDF failed: {str(e)}'}
+
+def handle_jpg_to_pdf(files, output_dir, form_data):
+    """Convert JPG images to PDF."""
+    try:
+        output_file = os.path.join(output_dir, 'converted.pdf')
+        
+        # Convert all images to RGB (required for PDF)
+        rgb_images = []
+        for img_path in files:
+            img = Image.open(img_path)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            rgb_images.append(img)
+        
+        if rgb_images:
+            rgb_images[0].save(
+                output_file,
+                "PDF",
+                save_all=True,
+                append_images=rgb_images[1:],
+                resolution=150
+            )
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/converted.pdf',
+            'filename': 'converted.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'JPG to PDF failed: {str(e)}'}
+
+def handle_png_to_pdf(files, output_dir, form_data):
+    """Convert PNG images to PDF."""
+    try:
+        output_file = os.path.join(output_dir, 'converted.pdf')
+        
+        rgb_images = []
+        for img_path in files:
+            img = Image.open(img_path)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            rgb_images.append(img)
+        
+        if rgb_images:
+            rgb_images[0].save(
+                output_file,
+                "PDF",
+                save_all=True,
+                append_images=rgb_images[1:],
+                resolution=150
+            )
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/converted.pdf',
+            'filename': 'converted.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'PNG to PDF failed: {str(e)}'}
+
+def handle_html_to_pdf(files, output_dir, form_data):
+    """Convert HTML to PDF."""
+    try:
+        output_file = os.path.join(output_dir, 'converted.pdf')
+        c = canvas.Canvas(output_file, pagesize=A4)
+        width, height = A4
+        
+        with open(files[0], 'r', encoding='utf-8', errors='ignore') as f:
+            html_content = f.read()
+        
+        # Simple HTML text extraction
+        import re
+        text = re.sub('<[^<]+>', '', html_content)
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        y_position = height - 50
+        c.setFont("Helvetica", 11)
+        
+        words = text.split()
+        line = ""
+        for word in words:
+            test_line = line + word + " "
+            if c.stringWidth(test_line, "Helvetica", 11) < width - 100:
+                line = test_line
+            else:
+                if y_position < 50:
+                    c.showPage()
+                    c.setFont("Helvetica", 11)
+                    y_position = height - 50
+                c.drawString(50, y_position, line)
+                y_position -= 18
+                line = word + " "
+        
+        if line:
+            c.drawString(50, y_position, line)
+        
+        c.save()
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/converted.pdf',
+            'filename': 'converted.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'HTML to PDF failed: {str(e)}'}
+
+def handle_edit_metadata(files, output_dir, form_data):
+    """Edit PDF metadata."""
+    try:
+        reader = PdfReader(files[0])
+        writer = PdfWriter()
+        
+        for page in reader.pages:
+            writer.add_page(page)
+        
+        metadata = {
+            '/Title': form_data.get('title', ''),
+            '/Author': form_data.get('author', ''),
+            '/Subject': form_data.get('subject', ''),
+            '/Keywords': form_data.get('keywords', ''),
+        }
+        
+        # Remove empty values
+        metadata = {k: v for k, v in metadata.items() if v}
+        
+        if metadata:
+            writer.add_metadata(metadata)
+        
+        output_file = os.path.join(output_dir, 'metadata_updated.pdf')
+        with open(output_file, 'wb') as f:
+            writer.write(f)
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/metadata_updated.pdf',
+            'filename': 'metadata_updated.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Metadata edit failed: {str(e)}'}
+
+def handle_sign_pdf(files, output_dir, form_data):
+    """Add signature text to PDF."""
+    try:
+        signature_text = form_data.get('signature', 'Signed')
+        reader = PdfReader(files[0])
+        writer = PdfWriter()
+        
+        # Create signature overlay
+        sig_path = os.path.join(output_dir, 'signature.pdf')
+        c = canvas.Canvas(sig_path, pagesize=letter)
+        c.setFont("Helvetica-Oblique", 20)
+        c.setFillColorRGB(0, 0, 0.8)
+        c.drawString(50, 50, signature_text)
+        c.save()
+        
+        sig_reader = PdfReader(sig_path)
+        sig_page = sig_reader.pages[0]
+        
+        # Add to last page
+        for i, page in enumerate(reader.pages):
+            if i == len(reader.pages) - 1:
+                page.merge_page(sig_page)
+            writer.add_page(page)
+        
+        output_file = os.path.join(output_dir, 'signed.pdf')
+        with open(output_file, 'wb') as f:
+            writer.write(f)
+        
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/signed.pdf',
+            'filename': 'signed.pdf'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Signing failed: {str(e)}'}
+
+# ============================================
+# DOWNLOAD ROUTE
+# ============================================
+
+@app.route('/download/<session_id>/<filename>')
+def download(session_id, filename):
+    """Download converted file."""
+    filepath = os.path.join(app.config['OUTPUT_FOLDER'], session_id, filename)
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    return "File not found", 404
+
+# ============================================
+# API ROUTES
+# ============================================
+
+@app.route('/api/tools')
+def api_tools():
+    """Get list of all tools."""
+    return jsonify({'tools': TOOLS})
+
+@app.route('/api/health')
+def health_check():
+    """Health check endpoint."""
+    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+
+# ============================================
+# ERROR HANDLERS
+# ============================================
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template('tool.html', tool=None, all_tools=TOOLS, error='Page not found'), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    return render_template('tool.html', tool=None, all_tools=TOOLS, error='Server error'), 500
+
+@app.route('/send-email', methods=['POST'])
+def send_email():
+    """Handle contact form submission and send email."""
+    try:
+        name = request.form.get('name')
+        email = request.form.get('email')
+        subject = request.form.get('subject')
+        message = request.form.get('message')
+
+        msg = EmailMessage()
+        msg['Subject'] = f"PDFMaster Pro Contact: {subject}"
+        msg['From'] = EMAIL_ADDRESS
+        msg['To'] = EMAIL_ADDRESS  # Sends the email to yourself
+        msg.set_content(f"From: {name} <{email}>\n\nMessage:\n{message}")
+
+        # Send email using Gmail SMTP
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+            smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            smtp.send_message(msg)
+
+        flash('✅ Message sent successfully! Thank you for your feedback.', 'success')
+    except Exception as e:
+        flash(f'❌ Failed to send message. Please try again later.', 'error')
+        print(f"Email error: {e}")
+    
+    return redirect(url_for('index'))
+
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)

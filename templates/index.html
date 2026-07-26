@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero">
+    <div class="hero-bg"></div>
+    <div class="container">
+        <div class="hero-content">
+            <h1 class="hero-title">
+                Every tool you need to work with PDFs
+                <span class="gradient-text">in one place</span>
+            </h1>
+            <p class="hero-subtitle">
+                Merge, split, compress, convert, rotate, unlock and watermark PDFs with just a few clicks.
+                Free, fast, and secure.
+            </p>
+            <div class="hero-stats">
+                <div class="stat">
+                    <span class="stat-number">22+</span>
+                    <span class="stat-label">PDF Tools</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">100%</span>
+                    <span class="stat-label">Free</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">Secure</span>
+                    <span class="stat-label">Processing</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Tools Section -->
+<section id="tools" class="tools-section">
+    <div class="container">
+        <div class="section-header">
+            <h2>All PDF Tools</h2>
+            <p>Choose from our comprehensive suite of PDF tools</p>
+        </div>
+
+        {% for category_key, category in categories.items() %}
+            {% if category.tools %}
+            <div class="category-section">
+                <h3 class="category-title">{{ category.name }}</h3>
+                <div class="tools-grid">
+                    {% for tool in category.tools %}
+                    <a href="{{ url_for('tool_page', tool_id=tool.id) }}" class="tool-card" style="--tool-color: {{ tool.color }}">
+                        <div class="tool-icon">{{ tool.icon }}</div>
+                        <div class="tool-info">
+                            <h4>{{ tool.name }}</h4>
+                            <p>{{ tool.description }}</p>
+                        </div>
+                        <div class="tool-arrow">→</div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Features Section -->
+<section class="features-section">
+    <div class="container">
+        <div class="section-header">
+            <h2>Why Choose PDFMaster Pro?</h2>
+            <p>Powerful features designed for everyone</p>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>Lightning Fast</h3>
+                <p>Process your PDFs in seconds with our optimized engine</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔒</div>
+                <h3>100% Secure</h3>
+                <p>Your files are processed locally and auto-deleted after 30 minutes</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <h3>High Quality</h3>
+                <p>Maintain the quality of your documents during conversion</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📱</div>
+                <h3>Works Everywhere</h3>
+                <p>Fully responsive design that works on any device</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA Section -->
+<section class="cta-section">
+    <div class="container">
+        <div class="cta-content">
+            <h2>Ready to get started?</h2>
+            <p>Choose any tool above and start converting your PDFs right now!</p>
+            <a href="#tools" class="btn btn-primary btn-large">Browse All Tools</a>
+        </div>
+    </div>
+</section>
+
+<!-- About Me Section -->
+<section id="about" class="about-section">
+    <div class="container">
+        <div class="section-header">
+            <h2>About Me</h2>
+            <p>The developer behind PDFMaster Pro</p>
+        </div>
+        <div class="about-content">
+            <div class="about-text">
+                <!-- I have kept your mobile number hidden as requested. Paste your paragraph below! -->
+                <p class="about-paragraph" id="aboutParagraph">
+                    <!-- Waiting for your paragraph... -->
+                    <em>Please provide your About Me paragraph to populate this section.</em>
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Contact Us Section -->
+<section id="contact" class="contact-section">
+    <div class="container">
+        <div class="section-header">
+            <h2>Contact Me</h2>
+            <p>Have suggestions, improvements, or comments? I'd love to hear from you!</p>
+        </div>
+        <div class="contact-form-container">
+            <form action="{{ url_for('send_email') }}" method="POST" class="contact-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="name">Your Name</label>
+                        <input type="text" id="name" name="name" required class="form-control" placeholder="John Doe">
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Your Email</label>
+                        <input type="email" id="email" name="email" required class="form-control" placeholder="john@example.com">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="subject">Subject</label>
+                    <input type="text" id="subject" name="subject" required class="form-control" placeholder="Feature Request / Bug Report">
+                </div>
+                <div class="form-group">
+                    <label for="message">Message</label>
+                    <textarea id="message" name="message" rows="5" required class="form-control" placeholder="Tell me your thoughts..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-large">Send Message</button>
+            </form>
+        </div>
+    </div>
+</section>
+
+{% endblock %}
