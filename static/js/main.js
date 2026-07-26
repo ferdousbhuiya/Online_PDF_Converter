@@ -235,6 +235,23 @@ function resetTool() {
     document.getElementById('progressFill').style.width = '0%';
 }
 
+// Toggle between Text and Image signature options
+function toggleSignatureOptions() {
+    const type = document.getElementById('sigTypeSelect').value;
+    const textOptions = document.getElementById('textSigOptions');
+    const imageOptions = document.getElementById('imageSigOptions');
+    
+    if (type === 'text') {
+        textOptions.style.display = 'block';
+        imageOptions.style.display = 'none';
+    } else {
+        textOptions.style.display = 'none';
+        imageOptions.style.display = 'block';
+    }
+}
+
+
+
 // ============================================
 // SMOOTH SCROLL
 // ============================================

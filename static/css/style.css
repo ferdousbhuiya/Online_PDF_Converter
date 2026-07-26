@@ -952,6 +952,52 @@ body {
 }
 
 
+/* About Section Social Links */
+.about-links {
+    margin-top: 30px;
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.btn-linkedin, .btn-github {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--white);
+    transition: var(--transition);
+}
+
+.btn-linkedin {
+    background-color: #0A66C2; /* Official LinkedIn Blue */
+}
+
+.btn-linkedin:hover {
+    background-color: #004182;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(10, 102, 194, 0.3);
+}
+
+.btn-github {
+    background-color: #24292F; /* Official GitHub Dark */
+}
+
+.btn-github:hover {
+    background-color: #000000;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(36, 41, 47, 0.3);
+}
+
+.btn-linkedin span, .btn-github span {
+    font-size: 1.2rem;
+}
+
 .tools-grid .tool-card:nth-child(1) { animation-delay: 0.05s; }
 .tools-grid .tool-card:nth-child(2) { animation-delay: 0.1s; }
 .tools-grid .tool-card:nth-child(3) { animation-delay: 0.15s; }

@@ -1054,33 +1054,64 @@ def handle_edit_metadata(files, output_dir, form_data):
         return {'success': False, 'error': f'Metadata edit failed: {str(e)}'}
 
 def handle_sign_pdf(files, output_dir, form_data):
-    """Add signature text to PDF."""
+    """Add signature (text or image) to PDF."""
     try:
-        signature_text = form_data.get('signature', 'Signed')
         reader = PdfReader(files[0])
         writer = PdfWriter()
-        
-        # Create signature overlay
+        sig_type = form_data.get('sig_type', 'text')
+
         sig_path = os.path.join(output_dir, 'signature.pdf')
         c = canvas.Canvas(sig_path, pagesize=letter)
-        c.setFont("Helvetica-Oblique", 20)
-        c.setFillColorRGB(0, 0, 0.8)
-        c.drawString(50, 50, signature_text)
+        width, height = letter
+
+        # Position signature at the bottom right
+        margin_x = 50
+        margin_y = 50
+
+        if sig_type == 'image':
+            # Handle image upload
+            sig_image = request.files.get('signature_image')
+            if sig_image and sig_image.filename:
+                img_ext = sig_image.filename.rsplit('.', 1)[1].lower()
+                img_path = os.path.join(output_dir, f'sig_upload.{img_ext}')
+                sig_image.save(img_path)
+
+                sig_width = int(form_data.get('signature_width', 150))
+                # Maintain a rough aspect ratio for height
+                sig_height = int(sig_width * 0.4) 
+
+                # Draw image
+                c.drawImage(img_path, width - margin_x - sig_width, margin_y, width=sig_width, height=sig_height)
+            else:
+                return {'success': False, 'error': 'No signature image uploaded.'}
+        else:
+            # Handle text signature
+            sig_text = form_data.get('signature_text', 'Signed')
+            sig_font = form_data.get('signature_font', 'Helvetica-Oblique')
+            sig_size = int(form_data.get('signature_size', 30))
+
+            c.setFont(sig_font, sig_size)
+            c.setFillColorRGB(0, 0, 0.8)  # Dark blue ink color
+            
+            # Calculate text width to align it to the right
+            text_width = c.stringWidth(sig_text, sig_font, sig_size)
+            c.drawString(width - margin_x - text_width, margin_y, sig_text)
+
         c.save()
-        
+
+        # Merge signature onto the last page of the PDF
         sig_reader = PdfReader(sig_path)
         sig_page = sig_reader.pages[0]
-        
-        # Add to last page
+
         for i, page in enumerate(reader.pages):
             if i == len(reader.pages) - 1:
                 page.merge_page(sig_page)
             writer.add_page(page)
-        
+
         output_file = os.path.join(output_dir, 'signed.pdf')
         with open(output_file, 'wb') as f:
             writer.write(f)
-        
+
         return {
             'success': True,
             'download_url': f'/download/{os.path.basename(output_dir)}/signed.pdf',
@@ -1089,6 +1120,7 @@ def handle_sign_pdf(files, output_dir, form_data):
     except Exception as e:
         return {'success': False, 'error': f'Signing failed: {str(e)}'}
 
+    
 # ============================================
 # DOWNLOAD ROUTE
 # ============================================

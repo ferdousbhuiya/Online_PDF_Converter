@@ -95,10 +95,51 @@
                     </div>
                     {% elif tool.id == 'sign' %}
                     <div class="option-group">
-                        <label>Signature Text</label>
-                        <input type="text" name="signature" class="form-control" placeholder="Enter your signature">
+                        <label>Signature Type</label>
+                        <select name="sig_type" class="form-control" id="sigTypeSelect" onchange="toggleSignatureOptions()">
+                            <option value="text">Type Text Signature</option>
+                            <option value="image">Upload Signature Image</option>
+                        </select>
                     </div>
-                    {% endif %}
+
+                    <!-- Text Signature Options -->
+                    <div id="textSigOptions">
+                        <div class="option-group">
+                            <label>Signature Text</label>
+                            <input type="text" name="signature_text" class="form-control" placeholder="Enter your full name">
+                        </div>
+                        <div class="option-group">
+                            <label>Font Style</label>
+                            <select name="signature_font" class="form-control">
+                                <option value="Helvetica-Oblique">Classic Italic (Standard)</option>
+                                <option value="Times-Italic">Elegant Serif (Formal)</option>
+                                <option value="Courier-Oblique">Typewriter (Vintage)</option>
+                            </select>
+                        </div>
+                        <div class="option-group">
+                            <label>Font Size</label>
+                            <select name="signature_size" class="form-control">
+                                <option value="20">Small</option>
+                                <option value="30" selected>Medium</option>
+                                <option value="40">Large</option>
+                                <option value="50">Extra Large</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Image Signature Options -->
+                    <div id="imageSigOptions" style="display: none;">
+                        <div class="option-group">
+                            <label>Upload Signature Image (PNG/JPG)</label>
+                            <input type="file" name="signature_image" accept="image/png, image/jpeg" class="form-control">
+                            <small>💡 Tip: A transparent PNG works best. Max recommended size: 500x200 pixels.</small>
+                        </div>
+                        <div class="option-group">
+                            <label>Signature Width (pixels)</label>
+                            <input type="number" name="signature_width" class="form-control" value="150" min="50" max="400">
+                        </div>
+                    </div>
+                    {% endif %} 
                 </div>
             </div>
 
