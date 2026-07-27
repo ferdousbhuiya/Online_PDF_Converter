@@ -1457,6 +1457,31 @@ def health_check():
         'email_address': EMAIL_ADDRESS[:3] + '***' if EMAIL_ADDRESS else None
     })
 
+@app.route('/api/test-email')
+def test_email():
+    """Test email configuration — sends a test message."""
+    if not EMAIL_ADDRESS or EMAIL_ADDRESS == 'your_email@gmail.com' or not EMAIL_PASSWORD or EMAIL_PASSWORD == 'your_gmail_app_password':
+        return jsonify({'success': False, 'error': 'Email not configured'})
+
+    try:
+        msg = EmailMessage()
+        msg['Subject'] = "PDFMaster Pro — Test Email"
+        msg['From'] = EMAIL_ADDRESS
+        msg['To'] = EMAIL_ADDRESS
+        msg.set_content("This is a test email from PDFMaster Pro. If you receive this, email is working correctly!")
+
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=30) as smtp:
+            smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            smtp.send_message(msg)
+
+        return jsonify({'success': True, 'message': 'Test email sent successfully'})
+    except Exception as e:
+        error_msg = str(e)
+        # Truncate password from any error messages
+        if EMAIL_PASSWORD in error_msg:
+            error_msg = error_msg.replace(EMAIL_PASSWORD, '***')
+        return jsonify({'success': False, 'error': error_msg})
+
 # ============================================
 # ERROR HANDLERS
 # ============================================
