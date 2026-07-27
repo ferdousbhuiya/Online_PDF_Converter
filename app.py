@@ -734,26 +734,61 @@ def handle_pdf_to_ppt(files, output_dir, form_data):
     except Exception as e:
         return {'success': False, 'error': f'PDF to PowerPoint failed: {str(e)}'}
 
-def handle_pdf_to_jpg(files, output_dir, form_data):
-    """Convert PDF pages to JPG images using PyMuPDF."""
-    try:
-        import fitz  # PyMuPDF
-        import zipfile
+_POPPLER_PATH = None
+_poppler_bin = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'poppler-bin', 'usr', 'bin')
+if os.path.exists(os.path.join(_poppler_bin, 'pdftoppm')):
+    _POPPLER_PATH = _poppler_bin
 
+
+def _pdf_to_images(files, output_dir, fmt, quality=90):
+    """Convert PDF pages to images. Try PyMuPDF → pdf2image → error."""
+    import zipfile
+
+    # Strategy 1: PyMuPDF (best quality, no system deps)
+    try:
+        import fitz
         image_files = []
         doc = fitz.open(files[0])
         for i, page in enumerate(doc):
             pix = page.get_pixmap(dpi=150)
-            img_path = os.path.join(output_dir, f'page_{i+1}.jpg')
-            pix.save(img_path)  # PyMuPDF infers JPEG from extension
+            img_path = os.path.join(output_dir, f'page_{i+1}.{fmt}')
+            pix.save(img_path)
             image_files.append(img_path)
         doc.close()
+        return image_files
+    except ImportError:
+        pass  # fitz not installed, try next
 
+    # Strategy 2: pdf2image with bundled poppler (if available)
+    try:
+        from pdf2image import convert_from_path
+        kw = {'dpi': 150, 'fmt': fmt}
+        if _POPPLER_PATH:
+            kw['poppler_path'] = _POPPLER_PATH
+        images = convert_from_path(files[0], **kw)
+        image_files = []
+        for i, img in enumerate(images):
+            img_path = os.path.join(output_dir, f'page_{i+1}.{fmt}')
+            img.save(img_path, fmt.upper(), quality=quality)
+            image_files.append(img_path)
+        return image_files
+    except ImportError:
+        pass
+
+    raise RuntimeError(
+        "No PDF renderer available. Install PyMuPDF (pip install PyMuPDF) "
+        "or ensure poppler-utils is available."
+    )
+
+
+def handle_pdf_to_jpg(files, output_dir, form_data):
+    try:
+        import zipfile
+        image_files = _pdf_to_images(files, output_dir, 'jpg')
         zip_path = os.path.join(output_dir, 'images.zip')
         with zipfile.ZipFile(zip_path, 'w') as zipf:
             for img_path in image_files:
                 zipf.write(img_path, os.path.basename(img_path))
-
         return {
             'success': True,
             'download_url': f'/download/{os.path.basename(output_dir)}/images.zip',
@@ -763,26 +798,15 @@ def handle_pdf_to_jpg(files, output_dir, form_data):
     except Exception as e:
         return {'success': False, 'error': f'PDF to JPG failed: {str(e)}'}
 
+
 def handle_pdf_to_png(files, output_dir, form_data):
-    """Convert PDF pages to PNG images using PyMuPDF."""
     try:
-        import fitz  # PyMuPDF
         import zipfile
-
-        image_files = []
-        doc = fitz.open(files[0])
-        for i, page in enumerate(doc):
-            pix = page.get_pixmap(dpi=150)
-            img_path = os.path.join(output_dir, f'page_{i+1}.png')
-            pix.save(img_path)
-            image_files.append(img_path)
-        doc.close()
-
+        image_files = _pdf_to_images(files, output_dir, 'png')
         zip_path = os.path.join(output_dir, 'images_png.zip')
         with zipfile.ZipFile(zip_path, 'w') as zipf:
             for img_path in image_files:
                 zipf.write(img_path, os.path.basename(img_path))
-
         return {
             'success': True,
             'download_url': f'/download/{os.path.basename(output_dir)}/images_png.zip',
