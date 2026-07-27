@@ -752,24 +752,27 @@ def handle_pdf_to_png(files, output_dir, form_data):
     except Exception as e:
         return {'success': False, 'error': f'PDF to PNG failed: {str(e)}'}
 
+# ── LibreOffice detection ──────────────────────────────────────────────────────
+
+LO_AVAILABLE = shutil.which('libreoffice') is not None
+
 def libreoffice_convert_to_pdf(input_path, output_dir):
-    """Convert any Office document to PDF using LibreOffice headless."""
+    """Convert Office doc to PDF via LibreOffice headless."""
     env = os.environ.copy()
-    env['HOME'] = output_dir  # LibreOffice needs writable home
+    env['HOME'] = output_dir
     try:
         result = subprocess.run(
             ['libreoffice', '--headless', '--convert-to', 'pdf',
              '--outdir', output_dir, input_path],
-            capture_output=True, text=True, timeout=120,
-            env=env
+            capture_output=True, text=True, timeout=120, env=env
         )
         if result.returncode != 0:
             raise RuntimeError(result.stderr.strip() or result.stdout.strip())
     except subprocess.TimeoutExpired:
         raise RuntimeError("Conversion timed out (120s)")
 
-def libreoffice_convert_to_pdf_batch(files, output_dir):
-    """Convert multiple Office files to PDF and merge."""
+def libreoffice_convert_batch(files, output_dir):
+    """Convert multiple files with LibreOffice and merge."""
     from pypdf import PdfMerger
 
     if len(files) == 1:
@@ -778,62 +781,206 @@ def libreoffice_convert_to_pdf_batch(files, output_dir):
         return os.path.join(output_dir, f'{base}.pdf')
 
     merger = PdfMerger()
-    temp_pdfs = []
-
-    for word_file in files:
-        libreoffice_convert_to_pdf(word_file, output_dir)
-        base = os.path.splitext(os.path.basename(word_file))[0]
-        pdf_path = os.path.join(output_dir, f'{base}.pdf')
-        if os.path.exists(pdf_path):
-            merger.append(pdf_path)
-            temp_pdfs.append(pdf_path)
-
-    output_file = os.path.join(output_dir, 'converted.pdf')
-    merger.write(output_file)
+    temps = []
+    for f in files:
+        libreoffice_convert_to_pdf(f, output_dir)
+        base = os.path.splitext(os.path.basename(f))[0]
+        pdf = os.path.join(output_dir, f'{base}.pdf')
+        if os.path.exists(pdf):
+            merger.append(pdf)
+            temps.append(pdf)
+    out = os.path.join(output_dir, 'converted.pdf')
+    merger.write(out)
     merger.close()
+    for p in temps:
+        try: os.remove(p)
+        except OSError: pass
+    return out
 
-    for p in temp_pdfs:
-        if os.path.exists(p):
-            os.remove(p)
+# ── Pure-Python fallbacks (no LibreOffice required) ───────────────────────────
 
-    return output_file
+def _fallback_word_to_pdf(files, output_dir):
+    """Render .docx to PDF using python-docx + reportlab."""
+    from docx import Document
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                    PageBreak, Table, TableStyle)
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+
+    out = os.path.join(output_dir, 'converted.pdf')
+    doc = SimpleDocTemplate(out, pagesize=A4,
+                            leftMargin=20*mm, rightMargin=20*mm,
+                            topMargin=20*mm, bottomMargin=20*mm)
+    styles = getSampleStyleSheet()
+    story = []
+
+    for i, path in enumerate(files):
+        if i > 0:
+            story.append(PageBreak())
+        try:
+            wd = Document(path)
+        except Exception as e:
+            story.append(Paragraph(f"<b>Cannot open {os.path.basename(path)}:</b> {e}",
+                                   styles['Normal']))
+            continue
+        for para in wd.paragraphs:
+            style = styles['Normal']
+            if para.style.name.startswith('Heading 1'):
+                style = styles['Heading1']
+            elif para.style.name.startswith('Heading 2'):
+                style = styles['Heading2']
+            elif para.style.name.startswith('Heading 3'):
+                style = styles['Heading3']
+            text = para.text.strip()
+            if not text:
+                story.append(Spacer(1, 3*mm))
+                continue
+            # Escape XML special chars for Platypus
+            text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            story.append(Paragraph(text, style))
+            story.append(Spacer(1, 1*mm))
+
+        # Tables
+        for table in wd.tables:
+            rows = []
+            for row in table.rows:
+                rows.append([cell.text.strip() for cell in row.cells])
+            if rows:
+                t = Table(rows, repeatRows=1)
+                t.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E8E8E8')),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ]))
+                story.append(Spacer(1, 3*mm))
+                story.append(t)
+                story.append(Spacer(1, 3*mm))
+
+    doc.build(story)
+    return out
+
+
+def _fallback_excel_to_pdf(files, output_dir):
+    """Render .xlsx to PDF using openpyxl + reportlab."""
+    import openpyxl
+    from reportlab.lib.pagesizes import landscape, A4
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                    PageBreak, Table, TableStyle)
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+
+    out = os.path.join(output_dir, 'converted.pdf')
+    doc = SimpleDocTemplate(out, pagesize=landscape(A4),
+                            leftMargin=10*mm, rightMargin=10*mm,
+                            topMargin=15*mm, bottomMargin=15*mm)
+    styles = getSampleStyleSheet()
+    story = []
+
+    for i, path in enumerate(files):
+        if i > 0:
+            story.append(PageBreak())
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            story.append(Paragraph(f"<b>{sheet_name}</b>", styles['Heading2']))
+            story.append(Spacer(1, 2*mm))
+            rows = []
+            for row in ws.iter_rows(values_only=True):
+                rows.append([str(c) if c is not None else '' for c in row])
+            if rows:
+                t = Table(rows, repeatRows=1)
+                t.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E8E8E8')),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ]))
+                story.append(t)
+                story.append(Spacer(1, 5*mm))
+        wb.close()
+
+    doc.build(story)
+    return out
+
+
+def _fallback_ppt_to_pdf(files, output_dir):
+    """Render .pptx to PDF using python-pptx + reportlab."""
+    from pptx import Presentation
+    from reportlab.lib.pagesizes import landscape, A4
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                    PageBreak)
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.lib.enums import TA_CENTER
+
+    out = os.path.join(output_dir, 'converted.pdf')
+    doc = SimpleDocTemplate(out, pagesize=landscape(A4),
+                            leftMargin=15*mm, rightMargin=15*mm,
+                            topMargin=20*mm, bottomMargin=15*mm)
+    styles = getSampleStyleSheet()
+    slide_style = ParagraphStyle('SlideTitle', parent=styles['Heading2'],
+                                 alignment=TA_CENTER, spaceAfter=6*mm)
+    story = []
+
+    for i, path in enumerate(files):
+        if i > 0:
+            story.append(PageBreak())
+        prs = Presentation(path)
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                if hasattr(shape, 'text') and shape.text.strip():
+                    text = shape.text.strip()
+                    text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    story.append(Paragraph(text, slide_style))
+            story.append(PageBreak())
+
+    doc.build(story)
+    return out
+
+
+# ── Office → PDF handlers (LO first, fallback to pure Python) ─────────────────
+
+def _best_office_convert(files, output_dir, fallback_fn, label):
+    """Try LibreOffice, fall back to pure-Python renderer."""
+    if LO_AVAILABLE:
+        try:
+            out = libreoffice_convert_batch(files, output_dir)
+            return out
+        except Exception as e:
+            print(f"LibreOffice {label} failed, falling back: {e}")
+
+    out = fallback_fn(files, output_dir)
+    return out
+
 
 def handle_word_to_pdf(files, output_dir, form_data):
-    """Convert Word documents to PDF using LibreOffice headless."""
     try:
-        output_file = libreoffice_convert_to_pdf_batch(files, output_dir)
-        return {
-            'success': True,
-            'download_url': f'/download/{os.path.basename(output_dir)}/{os.path.basename(output_file)}',
-            'filename': 'converted.pdf'
-        }
+        out = _best_office_convert(files, output_dir, _fallback_word_to_pdf, 'Word→PDF')
+        return {'success': True,
+                'download_url': f'/download/{os.path.basename(output_dir)}/{os.path.basename(out)}',
+                'filename': 'converted.pdf'}
     except Exception as e:
         return {'success': False, 'error': f'Word to PDF failed: {str(e)}'}
 
-
-
-    
 def handle_excel_to_pdf(files, output_dir, form_data):
-    """Convert Excel to PDF using LibreOffice headless."""
     try:
-        output_file = libreoffice_convert_to_pdf_batch(files, output_dir)
-        return {
-            'success': True,
-            'download_url': f'/download/{os.path.basename(output_dir)}/{os.path.basename(output_file)}',
-            'filename': 'converted.pdf'
-        }
+        out = _best_office_convert(files, output_dir, _fallback_excel_to_pdf, 'Excel→PDF')
+        return {'success': True,
+                'download_url': f'/download/{os.path.basename(output_dir)}/{os.path.basename(out)}',
+                'filename': 'converted.pdf'}
     except Exception as e:
         return {'success': False, 'error': f'Excel to PDF failed: {str(e)}'}
 
 def handle_ppt_to_pdf(files, output_dir, form_data):
-    """Convert PowerPoint to PDF using LibreOffice headless."""
     try:
-        output_file = libreoffice_convert_to_pdf_batch(files, output_dir)
-        return {
-            'success': True,
-            'download_url': f'/download/{os.path.basename(output_dir)}/{os.path.basename(output_file)}',
-            'filename': 'converted.pdf'
-        }
+        out = _best_office_convert(files, output_dir, _fallback_ppt_to_pdf, 'PowerPoint→PDF')
+        return {'success': True,
+                'download_url': f'/download/{os.path.basename(output_dir)}/{os.path.basename(out)}',
+                'filename': 'converted.pdf'}
     except Exception as e:
         return {'success': False, 'error': f'PowerPoint to PDF failed: {str(e)}'}
 
