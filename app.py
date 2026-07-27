@@ -1541,27 +1541,22 @@ def handle_crop_pdf(files, output_dir, form_data):
 
 
 def handle_ocr_pdf(files, output_dir, form_data):
-    """OCR scanned PDF — overlay text to make it searchable."""
+    """OCR scanned PDF — render pages as images in a new PDF (no Tesseract needed)."""
     try:
-        import tempfile
-        from pdf2image import convert_from_path
         from PIL import Image
-
-        lang = form_data.get('ocr_lang', 'eng')
-
-        # Convert PDF pages to images
-        images = convert_from_path(files[0], dpi=200)
+        from reportlab.pdfgen import canvas as rl_canvas
+        images = _pdf_to_images(files, output_dir, 'png')
         output_pages = []
 
-        for i, img in enumerate(images):
-            # Create a page-sized PDF with the image as background
+        for i, img_path in enumerate(images):
+            img = Image.open(img_path)
+            w, h = img.size
             page_pdf = os.path.join(output_dir, f'ocr_page_{i}.pdf')
-            c = canvas.Canvas(page_pdf, pagesize=(img.width, img.height))
-            c.drawInlineImage(img, 0, 0, width=img.width, height=img.height)
+            c = rl_canvas.Canvas(page_pdf, pagesize=(w, h))
+            c.drawInlineImage(img, 0, 0, width=w, height=h)
             c.save()
             output_pages.append(page_pdf)
 
-        # Merge all pages
         merger = PdfMerger()
         for page_pdf in output_pages:
             merger.append(page_pdf)
@@ -1569,12 +1564,9 @@ def handle_ocr_pdf(files, output_dir, form_data):
         merger.write(output_file)
         merger.close()
 
-        # Cleanup temp page files
         for p in output_pages:
-            try:
-                os.remove(p)
-            except:
-                pass
+            try: os.remove(p)
+            except OSError: pass
 
         return {
             'success': True,
