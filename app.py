@@ -1707,9 +1707,13 @@ def _send_via_sendgrid(to_email, subject, text_body):
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        if resp.status not in (200, 201, 202):
-            raise RuntimeError(f"SendGrid API error: HTTP {resp.status}")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            if resp.status not in (200, 201, 202):
+                raise RuntimeError(f"SendGrid API error: HTTP {resp.status}")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', errors='replace')[:500]
+        raise RuntimeError(f"SendGrid {e.code}: {body}")
 
 
 @app.route('/api/test-email')
