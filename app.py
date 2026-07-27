@@ -16,8 +16,8 @@ from dotenv import load_dotenv
 from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 from config import Config
-import smtplib
-from email.message import EmailMessage
+import urllib.request
+import json
 
 # Load .env file
 load_dotenv()
@@ -1687,31 +1687,44 @@ def health_check():
         'libreoffice_path': _lo_binary
     })
 
+def _send_via_sendgrid(to_email, subject, text_body):
+    """Send email via SendGrid HTTP API (no SMTP needed)."""
+    api_key = EMAIL_PASSWORD  # User puts SendGrid API key here
+    data = {
+        "personalizations": [{"to": [{"email": to_email}]}],
+        "from": {"email": EMAIL_ADDRESS},
+        "subject": subject,
+        "content": [{"type": "text/plain", "value": text_body}],
+    }
+    req = urllib.request.Request(
+        "https://api.sendgrid.com/v3/mail/send",
+        data=json.dumps(data).encode(),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        if resp.status not in (200, 201, 202):
+            raise RuntimeError(f"SendGrid API error: HTTP {resp.status}")
+
+
 @app.route('/api/test-email')
 def test_email():
-    """Test email configuration — sends a test message."""
+    """Test email via SendGrid HTTP API."""
     if not EMAIL_ADDRESS or EMAIL_ADDRESS == 'your_email@gmail.com' or not EMAIL_PASSWORD or EMAIL_PASSWORD == 'your_gmail_app_password':
         return jsonify({'success': False, 'error': 'Email not configured'})
 
     try:
-        msg = EmailMessage()
-        msg['Subject'] = "PDFMaster Pro — Test Email"
-        msg['From'] = EMAIL_ADDRESS
-        msg['To'] = EMAIL_ADDRESS
-        msg.set_content("This is a test email from PDFMaster Pro. If you receive this, email is working correctly!")
-
-        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=30) as smtp:
-            smtp.starttls()
-            smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            smtp.send_message(msg)
-
+        _send_via_sendgrid(
+            EMAIL_ADDRESS,
+            "PDFMaster Pro — Test Email",
+            "This is a test email from PDFMaster Pro. If you receive this, email is working correctly!"
+        )
         return jsonify({'success': True, 'message': 'Test email sent successfully'})
     except Exception as e:
-        error_msg = str(e)
-        # Truncate password from any error messages
-        if EMAIL_PASSWORD in error_msg:
-            error_msg = error_msg.replace(EMAIL_PASSWORD, '***')
-        return jsonify({'success': False, 'error': error_msg})
+        return jsonify({'success': False, 'error': str(e)})
 
 # ============================================
 # ERROR HANDLERS
@@ -1743,22 +1756,17 @@ def send_email():
     except Exception as e:
         print(f"Contact save error: {e}")
 
-    # Try email in background thread — won't block response
+    # Try email via SendGrid HTTP API in background
     if EMAIL_ADDRESS and EMAIL_ADDRESS != 'your_email@gmail.com' and EMAIL_PASSWORD and EMAIL_PASSWORD != 'your_gmail_app_password':
         def send_async():
             try:
-                msg = EmailMessage()
-                msg['Subject'] = f"PDFMaster Pro Contact: {subject}"
-                msg['From'] = EMAIL_ADDRESS
-                msg['To'] = EMAIL_ADDRESS
-                msg.set_content(f"From: {name} <{email}>\n\nMessage:\n{message}")
-                with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=30) as smtp:
-            smtp.starttls()
-                    smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-                    smtp.send_message(msg)
+                _send_via_sendgrid(
+                    EMAIL_ADDRESS,
+                    f"PDFMaster Pro Contact: {subject}",
+                    f"From: {name} <{email}>\n\nMessage:\n{message}"
+                )
             except Exception as e:
                 print(f"Email send error: {e}")
-
         threading.Thread(target=send_async, daemon=True).start()
         flash('✅ Message sent! Thank you for your feedback.', 'success')
     else:
