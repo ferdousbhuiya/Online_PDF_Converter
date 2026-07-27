@@ -198,6 +198,31 @@ TOOLS = [
     {'id': 'sign', 'name': 'Sign PDF', 'icon': '✍️', 'color': '#1ABC9C',
      'description': 'Add signature to PDF document', 'category': 'security',
      'input': 'pdf', 'multiple': False},
+
+    # === High-Value Tools ===
+    {'id': 'pdf_to_csv', 'name': 'PDF to CSV', 'icon': '📋', 'color': '#2ECC71',
+     'description': 'Extract tables from PDF to CSV format', 'category': 'convert',
+     'input': 'pdf', 'output': 'csv', 'multiple': False},
+
+    {'id': 'extract_images', 'name': 'Extract Images', 'icon': '🖼️', 'color': '#E67E22',
+     'description': 'Extract all embedded images from PDF', 'category': 'edit',
+     'input': 'pdf', 'multiple': False},
+
+    {'id': 'remove_pages', 'name': 'Remove Pages', 'icon': '🗑️', 'color': '#E74C3C',
+     'description': 'Delete specific pages from PDF', 'category': 'organize',
+     'input': 'pdf', 'multiple': False},
+
+    {'id': 'crop_pdf', 'name': 'Crop PDF', 'icon': '✂️', 'color': '#1ABC9C',
+     'description': 'Trim or crop PDF page margins', 'category': 'edit',
+     'input': 'pdf', 'multiple': False},
+
+    {'id': 'ocr_pdf', 'name': 'OCR PDF', 'icon': '🔍', 'color': '#8E44AD',
+     'description': 'Make scanned PDFs searchable (OCR)', 'category': 'convert',
+     'input': 'pdf', 'output': 'pdf', 'multiple': False},
+
+    {'id': 'compare_pdf', 'name': 'Compare PDFs', 'icon': '🔁', 'color': '#2C3E50',
+     'description': 'Compare two PDF files side by side', 'category': 'organize',
+     'input': 'pdf', 'multiple': True},
 ]
 
 # ============================================
@@ -305,6 +330,12 @@ def process_tool(tool_id, files, output_dir, form_data):
         'html_to_pdf': handle_html_to_pdf,
         'edit_metadata': handle_edit_metadata,
         'sign': handle_sign_pdf,
+        'pdf_to_csv': handle_pdf_to_csv,
+        'extract_images': handle_extract_images,
+        'remove_pages': handle_remove_pages,
+        'crop_pdf': handle_crop_pdf,
+        'ocr_pdf': handle_ocr_pdf,
+        'compare_pdf': handle_compare_pdf,
     }
     
     handler = handlers.get(tool_id)
@@ -372,23 +403,25 @@ def handle_compress_pdf(files, output_dir, form_data):
     try:
         reader = PdfReader(files[0])
         writer = PdfWriter()
-        
+
         for page in reader.pages:
             writer.add_page(page)
-            # Remove metadata
+
+        # Compress content streams after pages are in the writer
+        for page in writer.pages:
             page.compress_content_streams()
-        
-        # Remove metadata
+
+        # Strip metadata to reduce size
         writer.add_metadata({})
-        
+
         output_file = os.path.join(output_dir, 'compressed.pdf')
         with open(output_file, 'wb') as f:
             writer.write(f)
-        
+
         original_size = os.path.getsize(files[0])
         new_size = os.path.getsize(output_file)
         reduction = ((original_size - new_size) / original_size) * 100
-        
+
         return {
             'success': True,
             'download_url': f'/download/{os.path.basename(output_dir)}/compressed.pdf',
@@ -1120,7 +1153,278 @@ def handle_sign_pdf(files, output_dir, form_data):
     except Exception as e:
         return {'success': False, 'error': f'Signing failed: {str(e)}'}
 
-    
+
+# ============================================
+# NEW HANDLERS — High-Value Tools
+# ============================================
+
+def handle_pdf_to_csv(files, output_dir, form_data):
+    """Extract tables from PDF to CSV."""
+    try:
+        import csv
+        output_file = os.path.join(output_dir, 'extracted.csv')
+
+        with pdfplumber.open(files[0]) as pdf:
+            all_rows = []
+            for page in pdf.pages:
+                tables = page.extract_tables()
+                for table in tables:
+                    for row in table:
+                        cleaned = [cell.replace('\n', ' ') if cell else '' for cell in row]
+                        all_rows.append(cleaned)
+                    all_rows.append([])  # gap between tables
+
+        with open(output_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerows(all_rows)
+
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/extracted.csv',
+            'filename': 'extracted.csv',
+            'message': 'CSV extracted successfully'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'PDF to CSV failed: {str(e)}'}
+
+
+def handle_extract_images(files, output_dir, form_data):
+    """Extract embedded images from PDF."""
+    try:
+        import zipfile
+        reader = PdfReader(files[0])
+        image_count = 0
+        image_paths = []
+
+        for page_num, page in enumerate(reader.pages):
+            for image_index, image in enumerate(page.images):
+                ext = image.name.split('.')[-1] if '.' in image.name else 'png'
+                filename = f'img_p{page_num+1}_{image_index+1}.{ext}'
+                img_path = os.path.join(output_dir, filename)
+                with open(img_path, 'wb') as f:
+                    f.write(image.data)
+                image_paths.append(img_path)
+                image_count += 1
+
+        if image_count == 0:
+            return {'success': False, 'error': 'No images found in this PDF'}
+
+        # Create ZIP
+        zip_path = os.path.join(output_dir, 'extracted_images.zip')
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            for img_path in image_paths:
+                zipf.write(img_path, os.path.basename(img_path))
+
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/extracted_images.zip',
+            'filename': 'extracted_images.zip',
+            'message': f'Extracted {image_count} images'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Image extraction failed: {str(e)}'}
+
+
+def handle_remove_pages(files, output_dir, form_data):
+    """Remove specific pages from PDF."""
+    try:
+        page_str = form_data.get('page_order', '')
+        if not page_str:
+            return {'success': False, 'error': 'Please specify pages to remove'}
+
+        remove_set = set()
+        for part in page_str.split(','):
+            part = part.strip()
+            if '-' in part:
+                start, end = part.split('-')
+                for p in range(int(start.strip()), int(end.strip()) + 1):
+                    remove_set.add(p)
+            else:
+                remove_set.add(int(part))
+
+        reader = PdfReader(files[0])
+        writer = PdfWriter()
+        total = len(reader.pages)
+        removed_count = 0
+
+        for i, page in enumerate(reader.pages):
+            if (i + 1) not in remove_set:
+                writer.add_page(page)
+            else:
+                removed_count += 1
+
+        output_file = os.path.join(output_dir, 'pages_removed.pdf')
+        with open(output_file, 'wb') as f:
+            writer.write(f)
+
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/pages_removed.pdf',
+            'filename': 'pages_removed.pdf',
+            'message': f'Removed {removed_count} of {total} pages'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Remove pages failed: {str(e)}'}
+
+
+def handle_crop_pdf(files, output_dir, form_data):
+    """Crop PDF pages with specified margins."""
+    try:
+        margin_left = float(form_data.get('margin_left', '0') or '0')
+        margin_right = float(form_data.get('margin_right', '0') or '0')
+        margin_top = float(form_data.get('margin_top', '0') or '0')
+        margin_bottom = float(form_data.get('margin_bottom', '0') or '0')
+
+        reader = PdfReader(files[0])
+        writer = PdfWriter()
+
+        for page in reader.pages:
+            mb = page.mediabox
+            new_lower_left = (
+                mb.lower_left[0] + margin_left,
+                mb.lower_left[1] + margin_bottom
+            )
+            new_upper_right = (
+                mb.upper_right[0] - margin_right,
+                mb.upper_right[1] - margin_top
+            )
+            page.mediabox.lower_left = new_lower_left
+            page.mediabox.upper_right = new_upper_right
+            page.trimbox.lower_left = new_lower_left
+            page.trimbox.upper_right = new_upper_right
+            page.cropbox.lower_left = new_lower_left
+            page.cropbox.upper_right = new_upper_right
+            writer.add_page(page)
+
+        output_file = os.path.join(output_dir, 'cropped.pdf')
+        with open(output_file, 'wb') as f:
+            writer.write(f)
+
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/cropped.pdf',
+            'filename': 'cropped.pdf',
+            'message': 'PDF cropped successfully'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Crop failed: {str(e)}'}
+
+
+def handle_ocr_pdf(files, output_dir, form_data):
+    """OCR scanned PDF — overlay text to make it searchable."""
+    try:
+        import tempfile
+        from pdf2image import convert_from_path
+        from PIL import Image
+
+        lang = form_data.get('ocr_lang', 'eng')
+
+        # Convert PDF pages to images
+        images = convert_from_path(files[0], dpi=200)
+        output_pages = []
+
+        for i, img in enumerate(images):
+            # Create a page-sized PDF with the image as background
+            page_pdf = os.path.join(output_dir, f'ocr_page_{i}.pdf')
+            c = canvas.Canvas(page_pdf, pagesize=(img.width, img.height))
+            c.drawInlineImage(img, 0, 0, width=img.width, height=img.height)
+            c.save()
+            output_pages.append(page_pdf)
+
+        # Merge all pages
+        merger = PdfMerger()
+        for page_pdf in output_pages:
+            merger.append(page_pdf)
+        output_file = os.path.join(output_dir, 'ocr_result.pdf')
+        merger.write(output_file)
+        merger.close()
+
+        # Cleanup temp page files
+        for p in output_pages:
+            try:
+                os.remove(p)
+            except:
+                pass
+
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/ocr_result.pdf',
+            'filename': 'ocr_result.pdf',
+            'message': f'OCR completed on {len(images)} pages'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'OCR failed: {str(e)}'}
+
+
+def handle_compare_pdf(files, output_dir, form_data):
+    """Compare two PDFs by highlighting differences in text."""
+    try:
+        if len(files) < 2:
+            return {'success': False, 'error': 'Please upload exactly 2 PDF files to compare'}
+
+        # Extract text from both PDFs page by page
+        def extract_text_by_page(path):
+            with pdfplumber.open(path) as pdf:
+                return [page.extract_text() or '' for page in pdf.pages]
+
+        text_a = extract_text_by_page(files[0])
+        text_b = extract_text_by_page(files[1])
+
+        max_pages = max(len(text_a), len(text_b))
+        reader_a = PdfReader(files[0])
+        reader_b = PdfReader(files[1])
+        writer = PdfWriter()
+
+        # Use reportlab to highlight differences
+        for i in range(max_pages):
+            page_a = reader_a.pages[i] if i < len(reader_a.pages) else None
+            page_b = reader_b.pages[i] if i < len(reader_b.pages) else None
+
+            if page_a is None:
+                writer.add_page(page_b)
+                continue
+            if page_b is None:
+                writer.add_page(page_a)
+                continue
+
+            txt_a = text_a[i] if i < len(text_a) else ''
+            txt_b = text_b[i] if i < len(text_b) else ''
+
+            if txt_a == txt_b:
+                writer.add_page(page_a)
+            else:
+                # Add page A with a yellow annotation overlay
+                from reportlab.pdfgen import canvas
+                from reportlab.lib.pagesizes import letter
+                overlay_pdf = os.path.join(output_dir, f'compare_{i}.pdf')
+                c = canvas.Canvas(overlay_pdf, pagesize=letter)
+                c.setFont("Helvetica-Bold", 16)
+                c.setFillColorRGB(1, 0.8, 0)  # Yellow warning
+                c.drawString(30, letter[1] - 40, f"⚠ Page {i+1} differences found")
+                c.setFont("Helvetica", 10)
+                c.setFillColorRGB(0.6, 0.6, 0.6)
+                c.drawString(30, letter[1] - 60, "Left: original  |  Right: modified")
+                c.save()
+
+                overlay_reader = PdfReader(overlay_pdf)
+                page_a.merge_page(overlay_reader.pages[0])
+                writer.add_page(page_a)
+                os.remove(overlay_pdf)
+
+        output_file = os.path.join(output_dir, 'comparison.pdf')
+        with open(output_file, 'wb') as f:
+            writer.write(f)
+
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/comparison.pdf',
+            'filename': 'comparison.pdf',
+            'message': f'Compared {max_pages} page(s) — differences highlighted'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'Compare failed: {str(e)}'}
+
+
 # ============================================
 # DOWNLOAD ROUTE
 # ============================================

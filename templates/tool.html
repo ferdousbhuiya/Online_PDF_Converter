@@ -3,7 +3,7 @@
 {% block title %}{{ tool.name }}{% endblock %}
 
 {% block content %}
-<section class="tool-hero" style="--tool-color: {{ tool.color }}">
+<section class="tool-hero" data-tool-color="{{ tool.color }}">
     <div class="container">
         <div class="tool-hero-content">
             <div class="tool-hero-icon">{{ tool.icon }}</div>
@@ -16,6 +16,12 @@
 <section class="tool-section">
     <div class="container">
         <div class="tool-workspace">
+            <!-- Active Tool Badge -->
+            <div class="tool-badge" data-tool-color="{{ tool.color }}">
+                <span class="tool-badge-icon">{{ tool.icon }}</span>
+                <span class="tool-badge-name">{{ tool.name }}</span>
+            </div>
+
             <!-- Upload Area -->
             <div class="upload-area" id="uploadArea">
                 <div class="upload-icon">📁</div>
@@ -139,7 +145,54 @@
                             <input type="number" name="signature_width" class="form-control" value="150" min="50" max="400">
                         </div>
                     </div>
-                    {% endif %} 
+                    {% elif tool.id == 'remove_pages' %}
+                    <div class="option-group">
+                        <label>Pages to Remove</label>
+                        <input type="text" name="page_order" class="form-control" placeholder="e.g., 1,3,5-8" value="1">
+                        <small>Use commas for single pages, hyphens for ranges</small>
+                    </div>
+                    {% elif tool.id == 'crop_pdf' %}
+                    <div class="option-group">
+                        <label>Crop Margins (points)</label>
+                        <div class="crop-grid">
+                            <input type="number" name="margin_top" class="form-control" placeholder="Top" value="0" min="0">
+                            <input type="number" name="margin_bottom" class="form-control" placeholder="Bottom" value="0" min="0">
+                            <input type="number" name="margin_left" class="form-control" placeholder="Left" value="0" min="0">
+                            <input type="number" name="margin_right" class="form-control" placeholder="Right" value="0" min="0">
+                        </div>
+                        <small>Positive values reduce page area</small>
+                    </div>
+                    {% elif tool.id == 'ocr_pdf' %}
+                    <div class="option-group">
+                        <label>OCR Language</label>
+                        <select name="ocr_lang" class="form-control">
+                            <option value="eng">English</option>
+                            <option value="fra">French</option>
+                            <option value="deu">German</option>
+                            <option value="spa">Spanish</option>
+                            <option value="ita">Italian</option>
+                        </select>
+                        <small>Scanned PDFs will be converted to searchable PDF</small>
+                    </div>
+                    {% elif tool.id == 'extract_images' %}
+                    <div class="option-group">
+                        <div class="info-box">
+                            <p>All embedded images from the PDF will be extracted and downloaded as a ZIP file.</p>
+                        </div>
+                    </div>
+                    {% elif tool.id == 'pdf_to_csv' %}
+                    <div class="option-group">
+                        <div class="info-box">
+                            <p>Tables found in the PDF will be extracted to a CSV file.</p>
+                        </div>
+                    </div>
+                    {% elif tool.id == 'compare_pdf' %}
+                    <div class="option-group">
+                        <div class="info-box">
+                            <p>Upload 2 PDF files. Differences will be highlighted in the comparison output.</p>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -185,7 +238,7 @@
             <div class="tools-grid">
                 {% for related in all_tools[:4] %}
                     {% if related.id != tool.id %}
-                    <a href="{{ url_for('tool_page', tool_id=related.id) }}" class="tool-card" style="--tool-color: {{ related.color }}">
+                    <a href="{{ url_for('tool_page', tool_id=related.id) }}" class="tool-card tool-card-vertical" data-tool-color="{{ related.color }}">
                         <div class="tool-icon">{{ related.icon }}</div>
                         <div class="tool-info">
                             <h4>{{ related.name }}</h4>

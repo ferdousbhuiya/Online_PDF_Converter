@@ -46,7 +46,7 @@
                 <h3 class="category-title">{{ category.name }}</h3>
                 <div class="tools-grid">
                     {% for tool in category.tools %}
-                    <a href="{{ url_for('tool_page', tool_id=tool.id) }}" class="tool-card" style="--tool-color: {{ tool.color }}">
+                    <a href="{{ url_for('tool_page', tool_id=tool.id) }}" class="tool-card tool-card-vertical" data-tool-color="{{ tool.color }}">
                         <div class="tool-icon">{{ tool.icon }}</div>
                         <div class="tool-info">
                             <h4>{{ tool.name }}</h4>
@@ -120,24 +120,24 @@
             </div>
             <div class="about-text">
                 <p>
-                    I’m an electrical engineer with deep experience in power systems and a growing focus on software engineering, automation, and data‑driven technology. I’m currently pursuing my MS in Electrical Engineering at FAU, where I’m expanding my skills in modern computing, intelligent systems, and practical problem‑solving. 
+                    I'm an electrical engineer and software enthusiast passionate about building tools that simplify complex workflows. Currently pursuing my MS in Electrical Engineering at FAU, I bridge the gap between traditional power systems and modern software engineering, combining deep technical knowledge with clean, functional code.
                 </p>
                 <p>
-                    I enjoy building tools that simplify complex tasks, improve efficiency, and create real value for people. My work reflects curiosity, discipline, and a commitment to continuous learning. 
+                    This project reflects my belief that great software should be intuitive, reliable, and accessible to everyone. Every tool here is built with attention to detail, performance, and user experience, because the best solutions are the ones people enjoy using.
                 </p>
                 <p>
-                    As I move forward, my goal is to combine engineering, software, and data to create meaningful digital solutions that unlock potential for individuals, businesses, and communities.
+                    I'm always exploring new technologies, refining my craft, and looking for ways to create digital solutions that make a real difference. If you have ideas, feedback, or just want to connect with me, I'd love to hear from you.
                 </p>
             </div>
             
             <!-- Social Links -->
             <div class="about-links">
                 <!-- REPLACE THE # BELOW WITH YOUR ACTUAL LINKEDIN URL -->
-                <a href="https://www.linkedin.com/in/ferdousb/" target="_blank" class="btn btn-linkedin">
+                <a href="https://www.linkedin.com/in/ferdousb/" target="_blank" rel="noopener noreferrer" class="btn btn-linkedin">
                     <span>💼</span> LinkedIn
                 </a>
                 <!-- REPLACE THE # BELOW WITH YOUR ACTUAL GITHUB URL -->
-                <a href="https://github.com/ferdousbhuiya" target="_blank" class="btn btn-github">
+                <a href="https://github.com/ferdousbhuiya" target="_blank" rel="noopener noreferrer" class="btn btn-github">
                     <span>🐙</span> GitHub
                 </a>
             </div>

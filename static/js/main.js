@@ -253,6 +253,26 @@ function toggleSignatureOptions() {
 
 
 // ============================================
+// TOOL CARD COLORS (replaces inline style)
+// ============================================
+document.querySelectorAll('.tool-card[data-tool-color]').forEach(card => {
+    const color = card.dataset.toolColor;
+    card.style.setProperty('--tool-color', color);
+    const icon = card.querySelector('.tool-icon');
+    if (icon) {
+        icon.style.background = `linear-gradient(135deg, ${color} 0%, ${color}cc 100%)`;
+    }
+});
+
+// Tool badge colors
+document.querySelectorAll('.tool-badge').forEach(badge => {
+    const color = badge.dataset.toolColor;
+    if (color) {
+        badge.style.setProperty('--tool-color', color);
+    }
+});
+
+// ============================================
 // SMOOTH SCROLL
 // ============================================
 
