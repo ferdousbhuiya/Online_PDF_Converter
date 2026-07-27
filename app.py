@@ -819,71 +819,44 @@ def libreoffice_convert_batch(files, output_dir):
 # ── Pure-Python fallbacks (no LibreOffice required) ───────────────────────────
 
 def _fallback_word_to_pdf(files, output_dir):
-    """Render .docx to PDF using python-docx + reportlab."""
-    from docx import Document
-    from reportlab.lib.pagesizes import A4
-    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
-                                    PageBreak, Table, TableStyle)
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import mm
-    from reportlab.lib import colors
+    """Render .docx to PDF using mammoth (docx→HTML w/ images) + xhtml2pdf."""
+    import mammoth, base64
+    from xhtml2pdf import pisa
+
+    def _embed(image):
+        with image.open() as b:
+            b64 = base64.b64encode(b.read()).decode()
+        return {'src': f'data:{image.content_type};base64,{b64}'}
+
+    body = []
+    for i, p in enumerate(files):
+        if i > 0:
+            body.append('<p style="page-break-before:always"> </p>')
+        with open(p, 'rb') as f:
+            r = mammoth.convert_to_html(f, convert_image=mammoth.images.img_element(_embed))
+            body.append(r.value)
+
+    html = f'''<html><head><meta charset="utf-8"/>
+<style>
+  @page {{ size: A4; margin: 2cm; }}
+  body {{ font-family: DejaVu, sans-serif; font-size: 11pt; line-height: 1.5; }}
+  h1 {{ font-size: 18pt; margin-top: 1em; }}
+  h2 {{ font-size: 14pt; margin-top: 1em; }}
+  h3 {{ font-size: 12pt; }}
+  img {{ max-width: 100%; height: auto; }}
+  table {{ border-collapse: collapse; width: 100%; margin: 0.5em 0; }}
+  td, th {{ border: 1px solid #999; padding: 4px 8px; font-size: 10pt; }}
+  th {{ background: #eee; }}
+</style></head><body>''' + '\n'.join(body) + '</body></html>'
 
     out = os.path.join(output_dir, 'converted.pdf')
-    doc = SimpleDocTemplate(out, pagesize=A4,
-                            leftMargin=20*mm, rightMargin=20*mm,
-                            topMargin=20*mm, bottomMargin=20*mm)
-    styles = getSampleStyleSheet()
-    story = []
-
-    for i, path in enumerate(files):
-        if i > 0:
-            story.append(PageBreak())
-        try:
-            wd = Document(path)
-        except Exception as e:
-            story.append(Paragraph(f"<b>Cannot open {os.path.basename(path)}:</b> {e}",
-                                   styles['Normal']))
-            continue
-        for para in wd.paragraphs:
-            style = styles['Normal']
-            if para.style.name.startswith('Heading 1'):
-                style = styles['Heading1']
-            elif para.style.name.startswith('Heading 2'):
-                style = styles['Heading2']
-            elif para.style.name.startswith('Heading 3'):
-                style = styles['Heading3']
-            text = para.text.strip()
-            if not text:
-                story.append(Spacer(1, 3*mm))
-                continue
-            # Escape XML special chars for Platypus
-            text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            story.append(Paragraph(text, style))
-            story.append(Spacer(1, 1*mm))
-
-        # Tables
-        for table in wd.tables:
-            rows = []
-            for row in table.rows:
-                rows.append([cell.text.strip() for cell in row.cells])
-            if rows:
-                t = Table(rows, repeatRows=1)
-                t.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E8E8E8')),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 9),
-                ]))
-                story.append(Spacer(1, 3*mm))
-                story.append(t)
-                story.append(Spacer(1, 3*mm))
-
-    doc.build(story)
+    with open(out, 'wb') as f:
+        pisa.CreatePDF(html, dest=f)
     return out
 
 
 def _fallback_excel_to_pdf(files, output_dir):
-    """Render .xlsx to PDF using openpyxl + reportlab."""
+    """Render .xlsx to PDF using openpyxl + reportlab (tables only)."""
     import openpyxl
     from reportlab.lib.pagesizes import landscape, A4
     from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
@@ -927,37 +900,36 @@ def _fallback_excel_to_pdf(files, output_dir):
 
 
 def _fallback_ppt_to_pdf(files, output_dir):
-    """Render .pptx to PDF using python-pptx + reportlab."""
+    """Render .pptx to PDF using python-pptx + xhtml2pdf."""
     from pptx import Presentation
-    from reportlab.lib.pagesizes import landscape, A4
-    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
-                                    PageBreak)
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import mm
-    from reportlab.lib.enums import TA_CENTER
+    from xhtml2pdf import pisa
 
-    out = os.path.join(output_dir, 'converted.pdf')
-    doc = SimpleDocTemplate(out, pagesize=landscape(A4),
-                            leftMargin=15*mm, rightMargin=15*mm,
-                            topMargin=20*mm, bottomMargin=15*mm)
-    styles = getSampleStyleSheet()
-    slide_style = ParagraphStyle('SlideTitle', parent=styles['Heading2'],
-                                 alignment=TA_CENTER, spaceAfter=6*mm)
-    story = []
-
-    for i, path in enumerate(files):
+    body = []
+    for i, p in enumerate(files):
         if i > 0:
-            story.append(PageBreak())
-        prs = Presentation(path)
+            body.append('<p style="page-break-before:always"> </p>')
+        prs = Presentation(p)
         for slide in prs.slides:
+            texts = []
             for shape in slide.shapes:
                 if hasattr(shape, 'text') and shape.text.strip():
-                    text = shape.text.strip()
-                    text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                    story.append(Paragraph(text, slide_style))
-            story.append(PageBreak())
+                    texts.append(shape.text.strip())
+            if texts:
+                body.append('<h2>Slide</h2>')
+                for t in texts:
+                    body.append(f'<p>{t}</p>')
+            body.append('<hr/>')
 
-    doc.build(story)
+    html = f'''<html><head><meta charset="utf-8"/>
+<style>
+  @page {{ size: A4 landscape; margin: 1.5cm; }}
+  body {{ font-family: DejaVu, sans-serif; font-size: 12pt; }}
+  h2 {{ text-align: center; color: #333; }}
+</style></head><body>''' + '\n'.join(body) + '</body></html>'
+
+    out = os.path.join(output_dir, 'converted.pdf')
+    with open(out, 'wb') as f:
+        pisa.CreatePDF(html, dest=f)
     return out
 
 

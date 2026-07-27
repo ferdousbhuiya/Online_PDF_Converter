@@ -2,15 +2,7 @@ services:
   - type: web
     name: pdfmaster-pro
     env: python
-    buildCommand: |
-      apt-get update -qq
-      apt-get install -y -qq --no-install-recommends libreoffice-writer libreoffice-calc libreoffice-impress fonts-liberation
-      echo "=== LO CHECK ==="
-      which libreoffice || echo "NOT_IN_PATH"
-      ls -la /usr/bin/libreoffice 2>/dev/null || ls -la /usr/bin/soffice 2>/dev/null || echo "BIN_MISSING"
-      libreoffice --version 2>/dev/null || soffice --version 2>/dev/null || echo "VERSION_FAILED"
-      echo "=== END LO CHECK ==="
-      pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --workers 1 --timeout 180 --bind 0.0.0.0:$PORT
     envVars:
       - key: SECRET_KEY
