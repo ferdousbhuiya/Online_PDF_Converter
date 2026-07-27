@@ -735,53 +735,54 @@ def handle_pdf_to_ppt(files, output_dir, form_data):
         return {'success': False, 'error': f'PDF to PowerPoint failed: {str(e)}'}
 
 def handle_pdf_to_jpg(files, output_dir, form_data):
-    """Convert PDF pages to JPG images."""
+    """Convert PDF pages to JPG images using PyMuPDF."""
     try:
-        from pdf2image import convert_from_path
+        import fitz  # PyMuPDF
         import zipfile
-        
-        images = convert_from_path(files[0], dpi=150)
-        
+
         image_files = []
-        for i, img in enumerate(images):
+        doc = fitz.open(files[0])
+        for i, page in enumerate(doc):
+            pix = page.get_pixmap(dpi=150)
             img_path = os.path.join(output_dir, f'page_{i+1}.jpg')
-            img.save(img_path, 'JPEG', quality=90)
+            pix.save(img_path)  # PyMuPDF infers JPEG from extension
             image_files.append(img_path)
-        
-        # Create ZIP
+        doc.close()
+
         zip_path = os.path.join(output_dir, 'images.zip')
         with zipfile.ZipFile(zip_path, 'w') as zipf:
             for img_path in image_files:
                 zipf.write(img_path, os.path.basename(img_path))
-        
+
         return {
             'success': True,
             'download_url': f'/download/{os.path.basename(output_dir)}/images.zip',
             'filename': 'images.zip',
-            'message': f'Converted {len(images)} pages to JPG'
+            'message': f'Converted {len(image_files)} pages to JPG'
         }
     except Exception as e:
         return {'success': False, 'error': f'PDF to JPG failed: {str(e)}'}
 
 def handle_pdf_to_png(files, output_dir, form_data):
-    """Convert PDF pages to PNG images."""
+    """Convert PDF pages to PNG images using PyMuPDF."""
     try:
-        from pdf2image import convert_from_path
+        import fitz  # PyMuPDF
         import zipfile
-        
-        images = convert_from_path(files[0], dpi=150)
-        
+
         image_files = []
-        for i, img in enumerate(images):
+        doc = fitz.open(files[0])
+        for i, page in enumerate(doc):
+            pix = page.get_pixmap(dpi=150)
             img_path = os.path.join(output_dir, f'page_{i+1}.png')
-            img.save(img_path, 'PNG')
+            pix.save(img_path)
             image_files.append(img_path)
-        
+        doc.close()
+
         zip_path = os.path.join(output_dir, 'images_png.zip')
         with zipfile.ZipFile(zip_path, 'w') as zipf:
             for img_path in image_files:
                 zipf.write(img_path, os.path.basename(img_path))
-        
+
         return {
             'success': True,
             'download_url': f'/download/{os.path.basename(output_dir)}/images_png.zip',
@@ -1351,20 +1352,33 @@ def handle_sign_pdf(files, output_dir, form_data):
 # ============================================
 
 def handle_pdf_to_csv(files, output_dir, form_data):
-    """Extract tables from PDF to CSV."""
+    """Extract tables from PDF to CSV. Falls back to text extraction."""
     try:
         import csv
+        import re
         output_file = os.path.join(output_dir, 'extracted.csv')
 
         with pdfplumber.open(files[0]) as pdf:
             all_rows = []
             for page in pdf.pages:
                 tables = page.extract_tables()
-                for table in tables:
-                    for row in table:
-                        cleaned = [cell.replace('\n', ' ') if cell else '' for cell in row]
-                        all_rows.append(cleaned)
-                    all_rows.append([])  # gap between tables
+                if tables:
+                    for table in tables:
+                        for row in table:
+                            cleaned = [cell.replace('\n', ' ') if cell else '' for cell in row]
+                            all_rows.append(cleaned)
+                        all_rows.append([])
+                else:
+                    # No tables — extract text, split into lines as single-column rows
+                    text = page.extract_text() or ''
+                    for line in text.split('\n'):
+                        line = line.strip()
+                        if line:
+                            all_rows.append([line])
+                    all_rows.append([])
+
+        if not all_rows:
+            all_rows.append(['No content extracted'])
 
         with open(output_file, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
