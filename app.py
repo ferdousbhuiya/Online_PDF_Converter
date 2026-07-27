@@ -11,6 +11,7 @@ import threading
 import time
 from datetime import datetime
 import subprocess
+import glob
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, flash
 from werkzeug.utils import secure_filename
@@ -755,9 +756,19 @@ def handle_pdf_to_png(files, output_dir, form_data):
 # ── LibreOffice detection ──────────────────────────────────────────────────────
 
 LO_AVAILABLE = False
-_lo_binary = shutil.which('libreoffice') or shutil.which('soffice')
+_lo_binary = shutil.which('libreoffice') or shutil.which('soffice') or shutil.which('/usr/bin/libreoffice')
+if not _lo_binary:
+    # Fallback: check common paths directly
+    for _p in ['/usr/bin/libreoffice', '/usr/bin/soffice', '/opt/libreoffice*/program/soffice']:
+        _glob = glob.glob(_p)
+        if _glob:
+            _lo_binary = _glob[0]
+            break
 if _lo_binary:
     LO_AVAILABLE = True
+    print(f"LibreOffice found: {_lo_binary}")
+else:
+    print("LibreOffice NOT found — using fallback Python renderer")
 
 
 def libreoffice_convert_to_pdf(input_path, output_dir):

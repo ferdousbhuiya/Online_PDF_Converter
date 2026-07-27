@@ -1,6 +1,6 @@
-FROM python:3.11-slim
+FROM python:3.11
 
-# Install LibreOffice with all recommended deps (needed for headless mode)
+# Install LibreOffice headless
 RUN apt-get update && apt-get install -y \
     libreoffice-writer \
     libreoffice-calc \
