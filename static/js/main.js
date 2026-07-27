@@ -174,7 +174,16 @@ function startConversion() {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            return response.text().then(text => { throw new Error(text || response.statusText); });
+        }
+        const ct = response.headers.get('content-type') || '';
+        if (!ct.includes('application/json') && !ct.includes('text/json')) {
+            return response.text().then(t => { throw new Error(t || 'Server returned non-JSON response'); });
+        }
+        return response.json();
+    })
     .then(data => {
         clearInterval(progressInterval);
         updateProgress(100);

@@ -372,9 +372,13 @@ def handle_merge_pdf(files, output_dir, form_data):
 def handle_split_pdf(files, output_dir, form_data):
     """Split PDF into individual pages."""
     try:
+        if not files:
+            return {'success': False, 'error': 'No file uploaded'}
         reader = PdfReader(files[0])
+        if len(reader.pages) == 0:
+            return {'success': False, 'error': 'PDF has no pages'}
+
         output_files = []
-        
         for i, page in enumerate(reader.pages):
             writer = PdfWriter()
             writer.add_page(page)
@@ -383,14 +387,13 @@ def handle_split_pdf(files, output_dir, form_data):
             with open(output_path, 'wb') as f:
                 writer.write(f)
             output_files.append(filename)
-        
-        # Create ZIP of all pages
+
         import zipfile
         zip_path = os.path.join(output_dir, 'split_pages.zip')
         with zipfile.ZipFile(zip_path, 'w') as zipf:
             for fname in output_files:
                 zipf.write(os.path.join(output_dir, fname), fname)
-        
+
         return {
             'success': True,
             'download_url': f'/download/{os.path.basename(output_dir)}/split_pages.zip',
@@ -623,10 +626,31 @@ def handle_pdf_to_word(files, output_dir, form_data):
     """Convert PDF to Word document."""
     try:
         output_file = os.path.join(output_dir, 'converted.docx')
-        cv = PDF2DOCXConverter(files[0])
-        cv.convert(output_file)
-        cv.close()
-        
+        try:
+            cv = PDF2DOCXConverter(files[0])
+            cv.convert(output_file)
+            cv.close()
+        except Exception:
+            # Fallback: text extraction via pdfplumber + python-docx
+            from docx import Document
+            import pdfplumber
+            doc = Document()
+            with pdfplumber.open(files[0]) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text() or ''
+                    if text.strip():
+                        doc.add_paragraph(text.strip())
+                    tables = page.extract_tables()
+                    for td in tables:
+                        t = doc.add_table(rows=len(td), cols=len(td[0]))
+                        for ri, row in enumerate(td):
+                            for ci, val in enumerate(row):
+                                t.cell(ri, ci).text = str(val or '')
+            doc.save(output_file)
+
+        if not os.path.exists(output_file):
+            return {'success': False, 'error': 'Word file was not created'}
+
         return {
             'success': True,
             'download_url': f'/download/{os.path.basename(output_dir)}/converted.docx',
@@ -641,21 +665,34 @@ def handle_pdf_to_excel(files, output_dir, form_data):
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Extracted Data"
-        
+
         with pdfplumber.open(files[0]) as pdf:
             row_num = 1
             for page_num, page in enumerate(pdf.pages):
                 tables = page.extract_tables()
+                if not tables:
+                    # Fallback: extract text line-by-line
+                    text = page.extract_text() or ''
+                    for line in text.split('\n'):
+                        if line.strip():
+                            ws.cell(row=row_num, column=1, value=line.strip())
+                            row_num += 1
+                    row_num += 1
+                    continue
                 for table in tables:
+                    if not table:
+                        continue
                     for row in table:
+                        if not row:
+                            continue
                         for col_num, cell in enumerate(row, 1):
                             ws.cell(row=row_num, column=col_num, value=cell)
                         row_num += 1
                     row_num += 1  # Gap between tables
-        
+
         output_file = os.path.join(output_dir, 'converted.xlsx')
         wb.save(output_file)
-        
+
         return {
             'success': True,
             'download_url': f'/download/{os.path.basename(output_dir)}/converted.xlsx',
@@ -1526,6 +1563,8 @@ def handle_compare_pdf(files, output_dir, form_data):
         text_b = extract_text_by_page(files[1])
 
         max_pages = max(len(text_a), len(text_b))
+        if max_pages == 0:
+            return {'success': False, 'error': 'Both PDFs appear to be empty'}
         reader_a = PdfReader(files[0])
         reader_b = PdfReader(files[1])
         writer = PdfWriter()
@@ -1550,21 +1589,23 @@ def handle_compare_pdf(files, output_dir, form_data):
             else:
                 # Add page A with a yellow annotation overlay
                 from reportlab.pdfgen import canvas
-                from reportlab.lib.pagesizes import letter
+                from reportlab.lib.units import mm
+                pw, ph = page_a.mediabox.width, page_a.mediabox.height
                 overlay_pdf = os.path.join(output_dir, f'compare_{i}.pdf')
-                c = canvas.Canvas(overlay_pdf, pagesize=letter)
-                c.setFont("Helvetica-Bold", 16)
-                c.setFillColorRGB(1, 0.8, 0)  # Yellow warning
-                c.drawString(30, letter[1] - 40, f"⚠ Page {i+1} differences found")
-                c.setFont("Helvetica", 10)
+                c = canvas.Canvas(overlay_pdf, pagesize=(pw, ph))
+                c.setFont("Helvetica-Bold", 14)
+                c.setFillColorRGB(1, 0.8, 0)
+                c.drawString(30, ph - 40, f"⚠ Page {i+1} differences found")
+                c.setFont("Helvetica", 9)
                 c.setFillColorRGB(0.6, 0.6, 0.6)
-                c.drawString(30, letter[1] - 60, "Left: original  |  Right: modified")
+                c.drawString(30, ph - 60, "Left: original  |  Right: modified")
                 c.save()
 
                 overlay_reader = PdfReader(overlay_pdf)
                 page_a.merge_page(overlay_reader.pages[0])
                 writer.add_page(page_a)
-                os.remove(overlay_pdf)
+                try: os.remove(overlay_pdf)
+                except OSError: pass
 
         output_file = os.path.join(output_dir, 'comparison.pdf')
         with open(output_file, 'wb') as f:
