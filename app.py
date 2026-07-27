@@ -49,7 +49,7 @@ app.config.from_object(Config)
 EMAIL_ADDRESS = os.environ.get('EMAIL_ADDRESS', 'your_email@gmail.com')
 EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', 'your_gmail_app_password')
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 
 # Create necessary directories
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -1700,7 +1700,8 @@ def test_email():
         msg['To'] = EMAIL_ADDRESS
         msg.set_content("This is a test email from PDFMaster Pro. If you receive this, email is working correctly!")
 
-        with smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, timeout=30) as smtp:
+        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=30) as smtp:
+            smtp.starttls()
             smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
             smtp.send_message(msg)
 
@@ -1751,7 +1752,8 @@ def send_email():
                 msg['From'] = EMAIL_ADDRESS
                 msg['To'] = EMAIL_ADDRESS
                 msg.set_content(f"From: {name} <{email}>\n\nMessage:\n{message}")
-                with smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, timeout=30) as smtp:
+                with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=30) as smtp:
+            smtp.starttls()
                     smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
                     smtp.send_message(msg)
             except Exception as e:
