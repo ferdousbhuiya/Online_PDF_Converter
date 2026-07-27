@@ -10,6 +10,7 @@ import shutil
 import threading
 import time
 from datetime import datetime
+import subprocess
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, flash
 from werkzeug.utils import secure_filename
@@ -751,107 +752,61 @@ def handle_pdf_to_png(files, output_dir, form_data):
     except Exception as e:
         return {'success': False, 'error': f'PDF to PNG failed: {str(e)}'}
 
-def handle_word_to_pdf(files, output_dir, form_data):
-    """Convert Word documents to PDF with proper COM initialization."""
+def libreoffice_convert_to_pdf(input_path, output_dir):
+    """Convert any Office document to PDF using LibreOffice headless."""
+    env = os.environ.copy()
+    env['HOME'] = output_dir  # LibreOffice needs writable home
     try:
-        import os
-        import comtypes.client
-        from comtypes.client import CreateObject
-        
-        # Initialize COM properly
-        comtypes.client.CreateObject("Word.Application")
-        
-        word_app = None
-        try:
-            # Create Word application
-            word_app = CreateObject("Word.Application")
-            word_app.Visible = False
-            
-            if len(files) == 1:
-                # Single file conversion
-                input_file = os.path.abspath(files[0])
-                output_file = os.path.abspath(os.path.join(output_dir, 'converted.pdf'))
-                
-                doc = word_app.Documents.Open(input_file)
-                doc.SaveAs(output_file, FileFormat=17)  # 17 = wdFormatPDF
-                doc.Close()
-            else:
-                # Multiple files - convert each and merge
-                from pypdf import PdfMerger
-                merger = PdfMerger()
-                
-                for i, word_file in enumerate(files):
-                    temp_pdf = os.path.abspath(os.path.join(output_dir, f'temp_{i}.pdf'))
-                    
-                    doc = word_app.Documents.Open(os.path.abspath(word_file))
-                    doc.SaveAs(temp_pdf, FileFormat=17)
-                    doc.Close()
-                    
-                    merger.append(temp_pdf)
-                
-                output_file = os.path.join(output_dir, 'converted.pdf')
-                merger.write(output_file)
-                merger.close()
-                
-                # Clean up temp files
-                for i in range(len(files)):
-                    temp_pdf = os.path.join(output_dir, f'temp_{i}.pdf')
-                    if os.path.exists(temp_pdf):
-                        os.remove(temp_pdf)
-            
-            return {
-                'success': True,
-                'download_url': f'/download/{os.path.basename(output_dir)}/converted.pdf',
-                'filename': 'converted.pdf'
-            }
-        finally:
-            if word_app:
-                word_app.Quit()
-            
-    except ImportError:
-        # Fallback to docx2pdf if comtypes fails
-        try:
-            from docx2pdf import convert
-            import pythoncom
-            import os
-            
-            # Initialize COM for this thread
-            pythoncom.CoInitialize()
-            
-            if len(files) == 1:
-                input_file = files[0]
-                output_file = os.path.join(output_dir, 'converted.pdf')
-                convert(input_file, output_file)
-            else:
-                from pypdf import PdfMerger
-                merger = PdfMerger()
-                
-                for i, word_file in enumerate(files):
-                    temp_pdf = os.path.join(output_dir, f'temp_{i}.pdf')
-                    convert(word_file, temp_pdf)
-                    merger.append(temp_pdf)
-                    
-                output_file = os.path.join(output_dir, 'converted.pdf')
-                merger.write(output_file)
-                merger.close()
-                
-                for i in range(len(files)):
-                    temp_pdf = os.path.join(output_dir, f'temp_{i}.pdf')
-                    if os.path.exists(temp_pdf):
-                        os.remove(temp_pdf)
-            
-            return {
-                'success': True,
-                'download_url': f'/download/{os.path.basename(output_dir)}/converted.pdf',
-                'filename': 'converted.pdf'
-            }
-        except Exception as e:
-            return {'success': False, 'error': f'Word to PDF failed: {str(e)}'}
-        finally:
-            try:
-                pythoncom.CoUninitialize()
-            except:
-                pass
+        result = subprocess.run(
+            ['libreoffice', '--headless', '--convert-to', 'pdf',
+             '--outdir', output_dir, input_path],
+            capture_output=True, text=True, timeout=120,
+            env=env
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip())
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Conversion timed out (120s)")
+
+def libreoffice_convert_to_pdf_batch(files, output_dir):
+    """Convert multiple Office files to PDF and merge."""
+    from pypdf import PdfMerger
+
+    if len(files) == 1:
+        libreoffice_convert_to_pdf(files[0], output_dir)
+        base = os.path.splitext(os.path.basename(files[0]))[0]
+        return os.path.join(output_dir, f'{base}.pdf')
+
+    merger = PdfMerger()
+    temp_pdfs = []
+
+    for word_file in files:
+        libreoffice_convert_to_pdf(word_file, output_dir)
+        base = os.path.splitext(os.path.basename(word_file))[0]
+        pdf_path = os.path.join(output_dir, f'{base}.pdf')
+        if os.path.exists(pdf_path):
+            merger.append(pdf_path)
+            temp_pdfs.append(pdf_path)
+
+    output_file = os.path.join(output_dir, 'converted.pdf')
+    merger.write(output_file)
+    merger.close()
+
+    for p in temp_pdfs:
+        if os.path.exists(p):
+            os.remove(p)
+
+    return output_file
+
+def handle_word_to_pdf(files, output_dir, form_data):
+    """Convert Word documents to PDF using LibreOffice headless."""
+    try:
+        output_file = libreoffice_convert_to_pdf_batch(files, output_dir)
+        return {
+            'success': True,
+            'download_url': f'/download/{os.path.basename(output_dir)}/{os.path.basename(output_file)}',
+            'filename': 'converted.pdf'
+        }
     except Exception as e:
         return {'success': False, 'error': f'Word to PDF failed: {str(e)}'}
 
@@ -859,89 +814,24 @@ def handle_word_to_pdf(files, output_dir, form_data):
 
     
 def handle_excel_to_pdf(files, output_dir, form_data):
-    """Convert Excel to PDF."""
+    """Convert Excel to PDF using LibreOffice headless."""
     try:
-        output_file = os.path.join(output_dir, 'converted.pdf')
-        c = canvas.Canvas(output_file, pagesize=A4)
-        width, height = A4
-        
-        for excel_file in files:
-            wb = openpyxl.load_workbook(excel_file)
-            
-            for sheet_name in wb.sheetnames:
-                ws = wb[sheet_name]
-                y_position = height - 50
-                
-                # Sheet title
-                c.setFont("Helvetica-Bold", 16)
-                c.drawString(50, y_position, sheet_name)
-                y_position -= 30
-                
-                c.setFont("Helvetica", 10)
-                
-                for row in ws.iter_rows(values_only=True):
-                    line = " | ".join([str(cell) if cell is not None else "" for cell in row])
-                    
-                    if y_position < 50:
-                        c.showPage()
-                        c.setFont("Helvetica", 10)
-                        y_position = height - 50
-                    
-                    c.drawString(50, y_position, line[:120])
-                    y_position -= 15
-                
-                c.showPage()
-        
-        c.save()
-        
+        output_file = libreoffice_convert_to_pdf_batch(files, output_dir)
         return {
             'success': True,
-            'download_url': f'/download/{os.path.basename(output_dir)}/converted.pdf',
+            'download_url': f'/download/{os.path.basename(output_dir)}/{os.path.basename(output_file)}',
             'filename': 'converted.pdf'
         }
     except Exception as e:
         return {'success': False, 'error': f'Excel to PDF failed: {str(e)}'}
 
 def handle_ppt_to_pdf(files, output_dir, form_data):
-    """Convert PowerPoint to PDF."""
+    """Convert PowerPoint to PDF using LibreOffice headless."""
     try:
-        output_file = os.path.join(output_dir, 'converted.pdf')
-        c = canvas.Canvas(output_file, pagesize=(960, 540))  # 16:9 ratio
-        
-        for ppt_file in files:
-            prs = Presentation(ppt_file)
-            
-            for slide in prs.slides:
-                y_position = 500
-                
-                for shape in slide.shapes:
-                    if hasattr(shape, "text") and shape.text:
-                        text = shape.text
-                        # Word wrap
-                        words = text.split()
-                        line = ""
-                        for word in words:
-                            test_line = line + word + " "
-                            if c.stringWidth(test_line, "Helvetica", 14) < 900:
-                                line = test_line
-                            else:
-                                c.setFont("Helvetica", 14)
-                                c.drawString(30, y_position, line)
-                                y_position -= 20
-                                line = word + " "
-                        
-                        if line:
-                            c.setFont("Helvetica", 14)
-                            c.drawString(30, y_position, line)
-                            y_position -= 20
-                
-                c.showPage()
-        
-        c.save()
-        
+        output_file = libreoffice_convert_to_pdf_batch(files, output_dir)
         return {
             'success': True,
-            'download_url': f'/download/{os.path.basename(output_dir)}/converted.pdf',
+            'download_url': f'/download/{os.path.basename(output_dir)}/{os.path.basename(output_file)}',
             'filename': 'converted.pdf'
         }
     except Exception as e:
