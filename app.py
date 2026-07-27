@@ -819,39 +819,166 @@ def libreoffice_convert_batch(files, output_dir):
 # ── Pure-Python fallbacks (no LibreOffice required) ───────────────────────────
 
 def _fallback_word_to_pdf(files, output_dir):
-    """Render .docx to PDF using mammoth (docx→HTML w/ images) + xhtml2pdf."""
-    import mammoth, base64
+    """Render .docx to PDF via custom XML walker + xhtml2pdf.
+
+    Walks docx XML directly using python-docx + lxml for full control
+    over page breaks, images, tables, and formatting.
+    """
+    from docx import Document
+    from docx.oxml.ns import qn
     from xhtml2pdf import pisa
+    from lxml import etree
+    import base64
 
-    def _embed(image):
-        with image.open() as b:
-            b64 = base64.b64encode(b.read()).decode()
-        return {'src': f'data:{image.content_type};base64,{b64}'}
+    W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+    R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+    WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'
 
-    body = []
-    for i, p in enumerate(files):
-        if i > 0:
-            body.append('<p style="page-break-before:always"> </p>')
-        with open(p, 'rb') as f:
-            r = mammoth.convert_to_html(f, convert_image=mammoth.images.img_element(_embed))
-            body.append(r.value)
+    def _imagemap(doc):
+        """relationship id → base64 data URI."""
+        m = {}
+        for rel in doc.part.rels.values():
+            if 'image' in rel.reltype:
+                ct = rel.content_type or 'image/png'
+                b64 = base64.b64encode(rel.target_part.blob).decode()
+                m[rel.rId] = f'data:{ct};base64,{b64}'
+        return m
 
-    html = f'''<html><head><meta charset="utf-8"/>
-<style>
-  @page {{ size: A4; margin: 2cm; }}
-  body {{ font-family: DejaVu, sans-serif; font-size: 11pt; line-height: 1.5; }}
-  h1 {{ font-size: 18pt; margin-top: 1em; }}
-  h2 {{ font-size: 14pt; margin-top: 1em; }}
-  h3 {{ font-size: 12pt; }}
-  img {{ max-width: 100%; height: auto; }}
-  table {{ border-collapse: collapse; width: 100%; margin: 0.5em 0; }}
-  td, th {{ border: 1px solid #999; padding: 4px 8px; font-size: 10pt; }}
-  th {{ background: #eee; }}
-</style></head><body>''' + '\n'.join(body) + '</body></html>'
+    pages_html = []
+
+    for path in files:
+        doc = Document(path)
+        imap = _imagemap(doc)
+        body_elems = []
+
+        # Walk body children in document order
+        for child in doc.element.body.iterchildren():
+            local = child.tag.split('}')[-1]
+
+            if local == 'p':
+                # Paragraph
+                # --- page break? ---
+                p_breaks = child.findall('.//' + qn('w:br'), doc.part.element.nsmap)
+                has_pb = any(
+                    br.get(qn('w:type')) == 'page'
+                    for br in child.findall('.//' + qn('w:br'))
+                )
+                if has_pb:
+                    body_elems.append('<pdf:nextpage/>')
+                    continue
+
+                # --- list indent ---
+                num_pr = child.find('.//' + qn('w:numPr'))
+                indent_style = ''
+                if num_pr is not None:
+                    ind_el = child.find('.//' + qn('w:ind'))
+                    if ind_el is not None:
+                        left = ind_el.get(qn('w:left'))
+                        if left:
+                            indent_style = f' style="margin-left:{int(left) // 567:.1f}em"'
+
+                # --- runs ---
+                runs_html = []
+                for r_elem in child.findall(qn('w:r')):
+                    # Text
+                    txt = ''.join(t.text or '' for t in r_elem.findall(qn('w:t')))
+                    if not txt:
+                        continue
+                    # Formatting
+                    rpr = r_elem.find(qn('w:rPr'))
+                    if rpr is not None:
+                        if rpr.find(qn('w:b')) is not None:
+                            txt = f'<strong>{txt}</strong>'
+                        if rpr.find(qn('w:i')) is not None:
+                            txt = f'<em>{txt}</em>'
+                        if rpr.find(qn('w:u')) is not None:
+                            # check u val != "none"
+                            u_el = rpr.find(qn('w:u'))
+                            u_val = u_el.get(qn('w:val')) if u_el is not None else None
+                            if u_val and u_val != 'none':
+                                txt = f'<u>{txt}</u>'
+                        # Font size
+                        sz_el = rpr.find(qn('w:sz'))
+                        if sz_el is not None:
+                            sz = sz_el.get(qn('w:val'))
+                            if sz:
+                                pt = int(sz) // 2
+                                runs_html.append(
+                                    f'<span style="font-size:{pt}pt">{txt}</span>'
+                                )
+                                continue
+                    runs_html.append(txt)
+
+                # --- images in paragraph ---
+                for drawing in child.findall('.//' + qn('w:drawing')):
+                    blip = drawing.find('.//' + '{' + A_NS + '}blip')
+                    if blip is not None:
+                        embed = blip.get('{' + R_NS + '}embed')
+                        if embed and embed in imap:
+                            # Get width in pixels
+                            extent = drawing.find(
+                                './/' + '{' + WP_NS + '}extent'
+                            )
+                            cx = 400  # default px
+                            if extent is not None:
+                                raw_cx = extent.get('cx')
+                                if raw_cx:
+                                    cx = int(int(raw_cx) / 914400 * 96)
+                            runs_html.append(
+                                f'<img src="{imap[embed]}" width="{cx}" '
+                                f'style="max-width:100%"/>'
+                            )
+
+                combined = ''.join(runs_html)
+                if combined:
+                    body_elems.append(
+                        f'<p{indent_style}>{combined}</p>'
+                    )
+
+            elif local == 'tbl':
+                # --- table ---
+                tbl = ['<table border="1" style="border-collapse:collapse;'
+                       'width:100%;margin:0.5em 0;font-size:9pt">']
+                # Check for header row (first row might have w:tblHeader)
+                rows = child.findall(qn('w:tr'))
+                for ri, row in enumerate(rows):
+                    tbl.append('<tr>')
+                    is_header = row.find('.//' + qn('w:tblHeader')) is not None
+                    for cell in row.findall(qn('w:tc')):
+                        cell_txt = []
+                        for cp in cell.findall(qn('w:p')):
+                            line = ''.join(
+                                ''.join(t.text or '' for t in r.findall(qn('w:t')))
+                                for r in cp.findall(qn('w:r'))
+                            )
+                            if line.strip():
+                                cell_txt.append(line)
+                        bg = '#f0f0f0' if is_header else 'white'
+                        bold = 'font-weight:bold;' if is_header else ''
+                        tbl.append(
+                            f'<td style="border:1px solid #999;padding:4px;'
+                            f'background:{bg};{bold}">'
+                            f'{" ".join(cell_txt)}</td>'
+                        )
+                    tbl.append('</tr>')
+                tbl.append('</table>')
+                body_elems.append('\n'.join(tbl))
+
+        pages_html.append('\n'.join(body_elems))
+
+    full_html = (
+        '<html><head><meta charset="utf-8"/><style>'
+        '@page { size: A4; margin: 2cm; }'
+        'body { font-family: DejaVu, sans-serif; font-size: 11pt; line-height: 1.5; }'
+        '</style></head><body>'
+        + '\n'.join(pages_html) +
+        '</body></html>'
+    )
 
     out = os.path.join(output_dir, 'converted.pdf')
     with open(out, 'wb') as f:
-        pisa.CreatePDF(html, dest=f)
+        pisa.CreatePDF(full_html, dest=f)
     return out
 
 
