@@ -18,6 +18,7 @@ __pycache__/
 # Uploads & Outputs
 uploads/
 outputs/
+contacts/
 
 # IDE
 .vscode/
