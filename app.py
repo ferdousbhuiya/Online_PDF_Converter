@@ -1683,6 +1683,8 @@ def health_check():
         'timestamp': datetime.now().isoformat(),
         'email_configured': email_configured,
         'email_address': EMAIL_ADDRESS[:3] + '***' if EMAIL_ADDRESS else None,
+        'api_key_prefix': (EMAIL_PASSWORD or '')[:6] + '***' if EMAIL_PASSWORD else None,
+        'api_key_length': len(EMAIL_PASSWORD or ''),
         'libreoffice_available': LO_AVAILABLE,
         'libreoffice_path': _lo_binary
     })
