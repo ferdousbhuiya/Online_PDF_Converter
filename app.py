@@ -1465,29 +1465,38 @@ def server_error(e):
 
 @app.route('/send-email', methods=['POST'])
 def send_email():
-    """Handle contact form submission and send email."""
+    """Handle contact form submission. Sends email if configured, otherwise saves to file."""
     try:
         name = request.form.get('name')
         email = request.form.get('email')
         subject = request.form.get('subject')
         message = request.form.get('message')
 
-        msg = EmailMessage()
-        msg['Subject'] = f"PDFMaster Pro Contact: {subject}"
-        msg['From'] = EMAIL_ADDRESS
-        msg['To'] = EMAIL_ADDRESS  # Sends the email to yourself
-        msg.set_content(f"From: {name} <{email}>\n\nMessage:\n{message}")
+        # Check if email is actually configured
+        if EMAIL_ADDRESS and EMAIL_ADDRESS != 'your_email@gmail.com' and EMAIL_PASSWORD and EMAIL_PASSWORD != 'your_gmail_app_password':
+            msg = EmailMessage()
+            msg['Subject'] = f"PDFMaster Pro Contact: {subject}"
+            msg['From'] = EMAIL_ADDRESS
+            msg['To'] = EMAIL_ADDRESS
+            msg.set_content(f"From: {name} <{email}>\n\nMessage:\n{message}")
 
-        # Send email using Gmail SMTP
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-            smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            smtp.send_message(msg)
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+                smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+                smtp.send_message(msg)
 
-        flash('✅ Message sent successfully! Thank you for your feedback.', 'success')
+            flash('✅ Message sent successfully! Thank you for your feedback.', 'success')
+        else:
+            # Save to local file when email not configured
+            contacts_dir = os.path.join(os.path.dirname(__file__), 'contacts')
+            os.makedirs(contacts_dir, exist_ok=True)
+            entry = f"---\nDate: {datetime.now()}\nFrom: {name} <{email}>\nSubject: {subject}\nMessage: {message}\n"
+            with open(os.path.join(contacts_dir, 'messages.txt'), 'a', encoding='utf-8') as f:
+                f.write(entry)
+            flash('✅ Message saved! I\'ll get back to you soon.', 'success')
     except Exception as e:
-        flash(f'❌ Failed to send message. Please try again later.', 'error')
-        print(f"Email error: {e}")
-    
+        flash('❌ Failed to send message. Please try again later.', 'error')
+        print(f"Contact form error: {e}")
+
     return redirect(url_for('index'))
 
 
