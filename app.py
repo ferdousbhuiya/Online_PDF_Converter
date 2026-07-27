@@ -45,9 +45,11 @@ from pptx.util import Inches as PptxInches
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# Email Configuration (You will set these up in Step 4)
+# Email Configuration
 EMAIL_ADDRESS = os.environ.get('EMAIL_ADDRESS', 'your_email@gmail.com')
 EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', 'your_gmail_app_password')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
 
 # Create necessary directories
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -1698,7 +1700,7 @@ def test_email():
         msg['To'] = EMAIL_ADDRESS
         msg.set_content("This is a test email from PDFMaster Pro. If you receive this, email is working correctly!")
 
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=30) as smtp:
+        with smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, timeout=30) as smtp:
             smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
             smtp.send_message(msg)
 
@@ -1749,7 +1751,7 @@ def send_email():
                 msg['From'] = EMAIL_ADDRESS
                 msg['To'] = EMAIL_ADDRESS
                 msg.set_content(f"From: {name} <{email}>\n\nMessage:\n{message}")
-                with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=30) as smtp:
+                with smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, timeout=30) as smtp:
                     smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
                     smtp.send_message(msg)
             except Exception as e:
