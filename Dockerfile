@@ -1,10 +1,12 @@
 FROM python:3.11-slim
 
-# Install LibreOffice
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install LibreOffice with all recommended deps (needed for headless mode)
+RUN apt-get update && apt-get install -y \
     libreoffice-writer \
     libreoffice-calc \
     libreoffice-impress \
+    fonts-liberation \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Working directory

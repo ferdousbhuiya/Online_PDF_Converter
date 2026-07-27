@@ -754,16 +754,24 @@ def handle_pdf_to_png(files, output_dir, form_data):
 
 # ── LibreOffice detection ──────────────────────────────────────────────────────
 
-LO_AVAILABLE = shutil.which('libreoffice') is not None
+LO_AVAILABLE = False
+_lo_binary = shutil.which('libreoffice') or shutil.which('soffice')
+if _lo_binary:
+    LO_AVAILABLE = True
+
 
 def libreoffice_convert_to_pdf(input_path, output_dir):
     """Convert Office doc to PDF via LibreOffice headless."""
+    home_dir = os.path.join(output_dir, '.lo-home')
+    os.makedirs(home_dir, exist_ok=True)
     env = os.environ.copy()
-    env['HOME'] = output_dir
+    env['HOME'] = home_dir
     try:
         result = subprocess.run(
-            ['libreoffice', '--headless', '--convert-to', 'pdf',
-             '--outdir', output_dir, input_path],
+            [_lo_binary, '--headless', '--convert-to', 'pdf',
+             '--outdir', output_dir,
+             '-env:UserInstallation=file:///' + home_dir.replace('\\', '/'),
+             input_path],
             capture_output=True, text=True, timeout=120, env=env
         )
         if result.returncode != 0:
@@ -1491,7 +1499,9 @@ def health_check():
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
         'email_configured': email_configured,
-        'email_address': EMAIL_ADDRESS[:3] + '***' if EMAIL_ADDRESS else None
+        'email_address': EMAIL_ADDRESS[:3] + '***' if EMAIL_ADDRESS else None,
+        'libreoffice_available': LO_AVAILABLE,
+        'libreoffice_path': _lo_binary
     })
 
 @app.route('/api/test-email')
