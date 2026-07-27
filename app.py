@@ -840,7 +840,7 @@ def _fallback_word_to_pdf(files, output_dir):
         m = {}
         for rel in doc.part.rels.values():
             if 'image' in rel.reltype:
-                ct = rel.content_type or 'image/png'
+                ct = rel.target_part.content_type or 'image/png'
                 b64 = base64.b64encode(rel.target_part.blob).decode()
                 m[rel.rId] = f'data:{ct};base64,{b64}'
         return m
