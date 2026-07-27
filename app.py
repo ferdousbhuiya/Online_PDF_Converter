@@ -1449,7 +1449,13 @@ def api_tools():
 @app.route('/api/health')
 def health_check():
     """Health check endpoint."""
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+    email_configured = bool(EMAIL_ADDRESS and EMAIL_ADDRESS != 'your_email@gmail.com' and EMAIL_PASSWORD and EMAIL_PASSWORD != 'your_gmail_app_password')
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat(),
+        'email_configured': email_configured,
+        'email_address': EMAIL_ADDRESS[:3] + '***' if EMAIL_ADDRESS else None
+    })
 
 # ============================================
 # ERROR HANDLERS
