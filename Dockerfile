@@ -1,24 +1,26 @@
 FROM python:3.11
 
-# Install LibreOffice headless
+# System tools required by document conversion, PDF rendering and OCR
 RUN apt-get update && apt-get install -y \
     libreoffice-writer \
     libreoffice-calc \
     libreoffice-impress \
+    poppler-utils \
+    tesseract-ocr \
     fonts-liberation \
     fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
-# Working directory
 WORKDIR /app
 
-# Copy requirements first (layer caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app
 COPY . .
 
-# Render sets PORT env var
+# Render provides PORT. Coolify can provide it too; 10000 is the fallback.
+ENV PORT=10000
 EXPOSE 10000
-CMD gunicorn app:app --workers 1 --timeout 180 --bind 0.0.0.0:$PORT
+
+# Run nested temp-file cleanup alongside Gunicorn.
+CMD ["sh", "-c", "python cleanup_worker.py & exec gunicorn app:app --workers 1 --timeout 180 --bind 0.0.0.0:${PORT}"]
