@@ -6,6 +6,7 @@ from converter_patch import handle_compress_pdf
 from extract_images_patch import handle_extract_images
 from fill_pdf_patch import handle_fill_pdf, make_pdf_fields_view
 from metadata_patch import handle_edit_metadata, make_pdf_metadata_view
+from ai_assistant_patch import make_ai_ask_view
 from frontend_pages import make_home_view, make_tools_view, about_page, contact_page
 from office_patch import make_word_to_pdf_handler
 from signature_patch import handle_sign_pdf
@@ -71,6 +72,7 @@ original_app.app.view_functions['download'] = make_download_view(original_app)
 original_app.app.view_functions['health_check'] = make_health_view(original_app)
 original_app.app.add_url_rule('/pdf-fields', endpoint='pdf_fields', view_func=make_pdf_fields_view(), methods=['POST'])
 original_app.app.add_url_rule('/pdf-metadata', endpoint='pdf_metadata', view_func=make_pdf_metadata_view(), methods=['POST'])
+original_app.app.add_url_rule('/ai/ask', endpoint='ai_ask', view_func=make_ai_ask_view(), methods=['POST'])
 
 # UI routes: keep the landing page focused and give each navigation item its own page.
 original_app.app.view_functions['index'] = make_home_view(original_app)
