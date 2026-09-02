@@ -18,8 +18,6 @@ def handle_compress_pdf(files, output_dir, form_data):
 
         candidates = []
         if gs:
-            # /ebook keeps a good quality/size balance. /screen is tried only if
-            # the source is already highly optimized and /ebook saves almost nothing.
             for preset, name in (('/ebook', 'ebook.pdf'), ('/screen', 'screen.pdf')):
                 candidate = os.path.join(output_dir, name)
                 cmd = [
@@ -42,10 +40,7 @@ def handle_compress_pdf(files, output_dir, form_data):
 
         if candidates:
             best = min(candidates, key=os.path.getsize)
-            if os.path.getsize(best) < original_size:
-                shutil.copy2(best, output_file)
-            else:
-                shutil.copy2(src, output_file)
+            shutil.copy2(best if os.path.getsize(best) < original_size else src, output_file)
         else:
             from pypdf import PdfReader, PdfWriter
             reader = PdfReader(src)
@@ -60,7 +55,6 @@ def handle_compress_pdf(files, output_dir, form_data):
             writer.add_metadata({})
             with open(output_file, 'wb') as fh:
                 writer.write(fh)
-
             if os.path.getsize(output_file) >= original_size:
                 shutil.copy2(src, output_file)
 
@@ -84,10 +78,8 @@ def handle_compress_pdf(files, output_dir, form_data):
 
 
 def _group_pdf_words_into_lines(words, tolerance=3.0):
-    """Group pdfplumber words into visually aligned text lines."""
     if not words:
         return []
-
     ordered = sorted(words, key=lambda w: (float(w.get('top', 0)), float(w.get('x0', 0))))
     lines = []
     for word in ordered:
@@ -120,11 +112,7 @@ def _group_pdf_words_into_lines(words, tolerance=3.0):
 
 
 def _region_is_near_white(image, line, page_width, page_height):
-    """Only replace raster text with editable text when its background is near-white.
-
-    This preserves diagrams, colored boxes and photographs instead of covering them
-    with white rectangles.
-    """
+    """Return True when the text region is on an ordinary light page background."""
     try:
         iw, ih = image.size
         x0 = max(0, int(line['x0'] / page_width * iw) - 2)
@@ -135,19 +123,15 @@ def _region_is_near_white(image, line, page_width, page_height):
             return False
         region = image.crop((x0, y0, x1, y1)).convert('RGB').resize((1, 1))
         r, g, b = region.getpixel((0, 0))
-        return min(r, g, b) >= 225
+        # The sample contains the dark text itself, so a threshold around 200
+        # still corresponds to a predominantly white/light background.
+        return min(r, g, b) >= 200
     except Exception:
         return False
 
 
 def handle_pdf_to_ppt(files, output_dir, form_data):
-    """Convert every PDF page into a faithful PowerPoint slide with editable text.
-
-    The original PDF page is used as the visual base so diagrams/equations/images
-    remain faithful. Text that sits on a near-white background is reconstructed as
-    editable PowerPoint text in the same location. Page count is validated so the
-    converter never silently drops pages.
-    """
+    """Convert each PDF page to a faithful slide and reconstruct editable text."""
     temp_images = []
     try:
         if not files:
@@ -182,8 +166,6 @@ def handle_pdf_to_ppt(files, output_dir, form_data):
                     'lines': _group_pdf_words_into_lines(words),
                 })
 
-        # JPEG keeps the PPTX substantially smaller than full-page PNG while
-        # retaining enough quality for normal documents and diagrams.
         images = convert_from_path(
             src,
             dpi=150,
@@ -191,7 +173,6 @@ def handle_pdf_to_ppt(files, output_dir, form_data):
             jpegopt={'quality': 88, 'progressive': True, 'optimize': True},
             thread_count=1,
         )
-
         if len(images) != page_count:
             return {
                 'success': False,
@@ -209,7 +190,6 @@ def handle_pdf_to_ppt(files, output_dir, form_data):
         slide_h = int(slide_w * first['height'] / first['width'])
         prs.slide_width = slide_w
         prs.slide_height = slide_h
-
         editable_line_count = 0
 
         for idx, (image, meta) in enumerate(zip(images, page_meta), start=1):
@@ -218,7 +198,6 @@ def handle_pdf_to_ppt(files, output_dir, form_data):
             temp_images.append(img_path)
 
             slide = prs.slides.add_slide(prs.slide_layouts[6])
-
             page_ratio = meta['width'] / meta['height']
             slide_ratio = prs.slide_width / prs.slide_height
             if page_ratio >= slide_ratio:
@@ -233,16 +212,11 @@ def handle_pdf_to_ppt(files, output_dir, form_data):
                 pic_left = int((prs.slide_width - pic_w) / 2)
 
             slide.shapes.add_picture(img_path, pic_left, pic_top, width=pic_w, height=pic_h)
-
             sx = pic_w / meta['width']
             sy = pic_h / meta['height']
 
-            # Replace ordinary text on white page areas with editable text. Leave
-            # text over diagrams/colored areas as raster so visual fidelity wins.
             for line in meta['lines']:
-                if len(line['text']) > 900:
-                    continue
-                if not _region_is_near_white(image, line, meta['width'], meta['height']):
+                if len(line['text']) > 900 or not _region_is_near_white(image, line, meta['width'], meta['height']):
                     continue
 
                 left = int(pic_left + line['x0'] * sx)
@@ -250,7 +224,6 @@ def handle_pdf_to_ppt(files, output_dir, form_data):
                 width = max(int((line['x1'] - line['x0']) * sx) + 6, int(Inches(0.2)))
                 height = max(int((line['bottom'] - line['top']) * sy * 1.35), int(Pt(line['size'] * 1.35)))
 
-                # Cover only the original text strip, preserving all other page art.
                 cover = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left - 2, top - 1, width + 4, height + 2)
                 cover.fill.solid()
                 cover.fill.fore_color.rgb = RGBColor(255, 255, 255)
@@ -268,8 +241,6 @@ def handle_pdf_to_ppt(files, output_dir, form_data):
 
                 p = tf.paragraphs[0]
                 p.alignment = PP_ALIGN.LEFT
-                p.space_before = 0
-                p.space_after = 0
                 run = p.add_run()
                 run.text = line['text']
                 run.font.name = 'Arial'
@@ -279,7 +250,6 @@ def handle_pdf_to_ppt(files, output_dir, form_data):
 
         output_file = os.path.join(output_dir, 'converted.pptx')
         prs.save(output_file)
-
         if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
             return {'success': False, 'error': 'PowerPoint file was not created'}
         if len(prs.slides) != page_count:
