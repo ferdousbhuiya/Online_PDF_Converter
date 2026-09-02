@@ -77,10 +77,24 @@
                         <small>Enter page numbers in desired order</small>
                     </div>
                     {% elif tool.id == 'edit_metadata' %}
-                    <div class="option-group"><label>Title</label><input type="text" name="title" class="form-control" placeholder="Document title"></div>
-                    <div class="option-group"><label>Author</label><input type="text" name="author" class="form-control" placeholder="Document author"></div>
-                    <div class="option-group"><label>Subject</label><input type="text" name="subject" class="form-control" placeholder="Document subject"></div>
-                    <div class="option-group"><label>Keywords</label><input type="text" name="keywords" class="form-control" placeholder="keyword1, keyword2"></div>
+                    <div class="fill-pdf-panel">
+                        <div class="info-box" id="metadataStatus">Select a PDF. Its current metadata will be loaded automatically.</div>
+                        <div id="metadataFields">
+                            <div class="option-group"><label>Title</label><input type="text" id="metadataTitle" name="title" class="form-control" placeholder="Document title"></div>
+                            <div class="option-group"><label>Author</label><input type="text" id="metadataAuthor" name="author" class="form-control" placeholder="Document author"></div>
+                            <div class="option-group"><label>Subject</label><input type="text" id="metadataSubject" name="subject" class="form-control" placeholder="Document subject"></div>
+                            <div class="option-group"><label>Keywords</label><input type="text" id="metadataKeywords" name="keywords" class="form-control" placeholder="keyword1, keyword2"></div>
+                            <div class="option-group"><label>Creator</label><input type="text" id="metadataCreator" name="creator" class="form-control" placeholder="Application or person that created the document"></div>
+                            <div class="option-group"><label>Producer</label><input type="text" id="metadataProducer" name="producer" class="form-control" placeholder="PDF producer"></div>
+                        </div>
+                        <div class="option-group">
+                            <label>
+                                <input type="checkbox" id="removeAllMetadata" name="remove_all_metadata" value="yes" onchange="toggleMetadataRemoval()">
+                                Remove all metadata
+                            </label>
+                            <small>Removes title, author, subject, keywords, creator, producer, and other stored document metadata.</small>
+                        </div>
+                    </div>
                     {% elif tool.id == 'pdf_to_ppt' %}
                     <div class="ai-ppt-options">
                         <div class="info-box ai-ppt-info">
