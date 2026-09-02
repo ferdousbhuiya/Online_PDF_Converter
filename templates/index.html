@@ -1,181 +1,128 @@
 {% extends "base.html" %}
 
 {% block content %}
-<!-- Hero Section -->
-<section class="hero">
-    <div class="hero-bg"></div>
-    <div class="container">
-        <div class="hero-content">
-            <h1 class="hero-title">
-                Every tool you need to work with PDFs
-                <span class="gradient-text">in one place</span>
-            </h1>
-            <p class="hero-subtitle">
-                Merge, split, compress, convert, rotate, unlock and watermark PDFs with just a few clicks.
-                Free, fast, and secure.
-            </p>
-            <div class="hero-stats">
-                <div class="stat">
-                    <span class="stat-number">22+</span>
-                    <span class="stat-label">PDF Tools</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-number">100%</span>
-                    <span class="stat-label">Free</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-number">Secure</span>
-                    <span class="stat-label">Processing</span>
-                </div>
-            </div>
-        </div>
+<section class="home-hero">
+    <div class="container home-hero-inner">
+        <div class="hero-kicker">Fast · Private · Easy to use</div>
+        <h1>Everything you need to work with <span class="gradient-text">PDFs</span></h1>
+        <p>Convert, compress, organize, edit and secure your documents with simple online tools.</p>
+        <a href="#tools" class="btn btn-primary">Explore PDF tools</a>
+        <div class="trust-line">22+ PDF tools <span>•</span> Free to use <span>•</span> Files automatically deleted after 30 minutes</div>
     </div>
 </section>
 
-<!-- Tools Section -->
-<section id="tools" class="tools-section">
+<section id="tools" class="tools-section home-tools-section">
     <div class="container">
-        <div class="section-header">
-            <h2>All PDF Tools</h2>
-            <p>Choose from our comprehensive suite of PDF tools</p>
+        <div class="tools-heading-row">
+            <div>
+                <h2>PDF tools</h2>
+                <p>Find the tool you need and get started.</p>
+            </div>
+            <div class="tool-search-wrap">
+                <span class="tool-search-icon">⌕</span>
+                <input id="toolSearch" class="tool-search" type="search" placeholder="Search PDF tools..." autocomplete="off" aria-label="Search PDF tools">
+            </div>
         </div>
 
-        {% for category_key, category in categories.items() %}
-            {% if category.tools %}
-            <div class="category-section">
-                <h3 class="category-title">{{ category.name }}</h3>
-                <div class="tools-grid">
-                    {% for tool in category.tools %}
-                    <a href="{{ url_for('tool_page', tool_id=tool.id) }}" class="tool-card tool-card-vertical" data-tool-color="{{ tool.color }}">
-                        <div class="tool-icon">{{ tool.icon }}</div>
-                        <div class="tool-info">
-                            <h4>{{ tool.name }}</h4>
-                            <p>{{ tool.description }}</p>
-                        </div>
-                        <div class="tool-arrow">→</div>
-                    </a>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-        {% endfor %}
-    </div>
-</section>
+        <div class="category-filters" id="categoryFilters">
+            <button type="button" class="category-filter active" data-category="all">All</button>
+            {% for category_key, category in categories.items() %}
+                {% if category.tools %}
+                <button type="button" class="category-filter" data-category="{{ category_key }}">{{ category.name }}</button>
+                {% endif %}
+            {% endfor %}
+        </div>
 
-<!-- Features Section -->
-<section class="features-section">
-    <div class="container">
-        <div class="section-header">
-            <h2>Why Choose PDFMaster Pro?</h2>
-            <p>Powerful features designed for everyone</p>
-        </div>
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon">⚡</div>
-                <h3>Lightning Fast</h3>
-                <p>Process your PDFs in seconds with our optimized engine</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">🔒</div>
-                <h3>100% Secure</h3>
-                <p>Your files are processed locally and auto-deleted after 30 minutes</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">🎯</div>
-                <h3>High Quality</h3>
-                <p>Maintain the quality of your documents during conversion</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">📱</div>
-                <h3>Works Everywhere</h3>
-                <p>Fully responsive design that works on any device</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- CTA Section -->
-<section class="cta-section">
-    <div class="container">
-        <div class="cta-content">
-            <h2>Ready to get started?</h2>
-            <p>Choose any tool above and start converting your PDFs right now!</p>
-            <a href="#tools" class="btn btn-primary btn-large">Browse All Tools</a>
-        </div>
-    </div>
-</section>
-
-<!-- About Me Section -->
-<section id="about" class="about-section">
-    <div class="container">
-        <div class="section-header">
-            <h2>About Me</h2>
-            <p>The developer behind PDFMaster Pro</p>
-        </div>
-        <div class="about-content">
-            <div class="about-header">
-                <div class="about-avatar">👨‍💻</div>
-                <h3>Md Ferdouse Hossain Bhuiya</h3>
-                <p class="about-title">MS in Electrical Engineering @ FAU | Software & Automation Enthusiast</p>
-            </div>
-            <div class="about-text">
-                <p>
-                    I'm an electrical engineer and software enthusiast passionate about building tools that simplify complex workflows. Currently pursuing my MS in Electrical Engineering at FAU, I bridge the gap between traditional power systems and modern software engineering, combining deep technical knowledge with clean, functional code.
-                </p>
-                <p>
-                    This project reflects my belief that great software should be intuitive, reliable, and accessible to everyone. Every tool here is built with attention to detail, performance, and user experience, because the best solutions are the ones people enjoy using.
-                </p>
-                <p>
-                    I'm always exploring new technologies, refining my craft, and looking for ways to create digital solutions that make a real difference. If you have ideas, feedback, or just want to connect with me, I'd love to hear from you.
-                </p>
-            </div>
-            
-            <!-- Social Links -->
-            <div class="about-links">
-                <!-- REPLACE THE # BELOW WITH YOUR ACTUAL LINKEDIN URL -->
-                <a href="https://www.linkedin.com/in/ferdousb/" target="_blank" rel="noopener noreferrer" class="btn btn-linkedin">
-                    <span>💼</span> LinkedIn
-                </a>
-                <!-- REPLACE THE # BELOW WITH YOUR ACTUAL GITHUB URL -->
-                <a href="https://github.com/ferdousbhuiya" target="_blank" rel="noopener noreferrer" class="btn btn-github">
-                    <span>🐙</span> GitHub
-                </a>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Contact Us Section -->
-<section id="contact" class="contact-section">
-    <div class="container">
-        <div class="section-header">
-            <h2>Contact Me</h2>
-            <p>Have suggestions, improvements, or comments? I'd love to hear from you!</p>
-        </div>
-        <div class="contact-form-container">
-            <form action="{{ url_for('send_email') }}" method="POST" class="contact-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="name">Your Name</label>
-                        <input type="text" id="name" name="name" required class="form-control" placeholder="John Doe">
+        <div class="home-tool-grid" id="homeToolGrid">
+            {% for category_key, category in categories.items() %}
+                {% for tool in category.tools %}
+                <a href="{{ url_for('tool_page', tool_id=tool.id) }}"
+                   class="home-tool-card tool-card"
+                   data-tool-color="{{ tool.color }}"
+                   data-category="{{ category_key }}"
+                   data-search="{{ tool.name|lower }} {{ tool.description|lower }} {{ category.name|lower }}">
+                    <div class="home-tool-icon tool-icon">{{ tool.icon }}</div>
+                    <div class="home-tool-copy tool-info">
+                        <h4>{{ tool.name }}</h4>
+                        <p>{{ tool.description }}</p>
                     </div>
-                    <div class="form-group">
-                        <label for="email">Your Email</label>
-                        <input type="email" id="email" name="email" required class="form-control" placeholder="john@example.com">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="subject">Subject</label>
-                    <input type="text" id="subject" name="subject" required class="form-control" placeholder="Feature Request / Bug Report">
-                </div>
-                <div class="form-group">
-                    <label for="message">Message</label>
-                    <textarea id="message" name="message" rows="5" required class="form-control" placeholder="Tell me your thoughts..."></textarea>
-                </div>
-                <button type="submit" class="btn btn-primary btn-large">Send Message</button>
-            </form>
+                    <span class="home-tool-arrow">→</span>
+                </a>
+                {% endfor %}
+            {% endfor %}
+        </div>
+        <div id="noToolResults" class="no-tool-results" hidden>No matching tools found. Try another search.</div>
+    </div>
+</section>
+
+<section class="home-confidence">
+    <div class="container confidence-grid">
+        <div class="confidence-item"><strong>Secure processing</strong><span>Temporary files are automatically removed.</span></div>
+        <div class="confidence-item"><strong>Useful output</strong><span>Built for practical document workflows.</span></div>
+        <div class="confidence-item"><strong>Works everywhere</strong><span>Designed for desktop, tablet and mobile.</span></div>
+    </div>
+</section>
+
+<section id="about" class="home-about">
+    <div class="container home-about-inner">
+        <div>
+            <span class="section-eyebrow">About</span>
+            <h2>PDFMaster Pro</h2>
+            <p>Built by Md Ferdouse Hossain Bhuiya to make everyday document work simpler, faster and accessible without complicated software.</p>
+        </div>
+        <div class="about-links">
+            <a href="https://www.linkedin.com/in/ferdousb/" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">LinkedIn</a>
+            <a href="https://github.com/ferdousbhuiya" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">GitHub</a>
         </div>
     </div>
 </section>
 
+<section id="contact" class="home-contact">
+    <div class="container home-contact-inner">
+        <div class="home-contact-copy">
+            <span class="section-eyebrow">Feedback</span>
+            <h2>Help improve PDFMaster Pro</h2>
+            <p>Found a problem or have an idea for a useful improvement? Send a message.</p>
+        </div>
+        <form action="{{ url_for('send_email') }}" method="POST" class="compact-contact-form">
+            <div class="form-row">
+                <input type="text" name="name" required class="form-control" placeholder="Your name" aria-label="Your name">
+                <input type="email" name="email" required class="form-control" placeholder="Your email" aria-label="Your email">
+            </div>
+            <input type="text" name="subject" required class="form-control" placeholder="Subject" aria-label="Subject">
+            <textarea name="message" rows="3" required class="form-control" placeholder="Your message" aria-label="Your message"></textarea>
+            <button type="submit" class="btn btn-primary">Send message</button>
+        </form>
+    </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const search = document.getElementById('toolSearch');
+    const filters = Array.from(document.querySelectorAll('.category-filter'));
+    const cards = Array.from(document.querySelectorAll('.home-tool-card'));
+    const empty = document.getElementById('noToolResults');
+    let activeCategory = 'all';
+
+    function updateTools() {
+        const query = (search.value || '').trim().toLowerCase();
+        let visible = 0;
+        cards.forEach(card => {
+            const categoryMatch = activeCategory === 'all' || card.dataset.category === activeCategory;
+            const searchMatch = !query || card.dataset.search.includes(query);
+            const show = categoryMatch && searchMatch;
+            card.hidden = !show;
+            if (show) visible += 1;
+        });
+        empty.hidden = visible !== 0;
+    }
+
+    filters.forEach(button => button.addEventListener('click', function () {
+        activeCategory = this.dataset.category;
+        filters.forEach(item => item.classList.toggle('active', item === this));
+        updateTools();
+    }));
+    search.addEventListener('input', updateTools);
+});
+</script>
 {% endblock %}
