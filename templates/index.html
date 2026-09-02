@@ -1,33 +1,38 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="home-hero home-hero-focused">
+<section class="home-hero home-hero-focused compact-home-hero">
     <div class="container home-hero-inner">
         <div class="hero-kicker">Fast · Private · Easy to use</div>
         <h1>Everything you need to work with <span class="gradient-text">PDFs</span></h1>
         <p>Convert, compress, organize, edit and secure documents with practical online PDF tools.</p>
         <div class="home-hero-actions">
-            <a href="{{ url_for('tools_page') }}" class="btn btn-primary btn-large">Browse all PDF tools</a>
-            <a href="{{ url_for('tool_page', tool_id='compress') }}" class="btn btn-secondary btn-large">Compress a PDF</a>
+            <a href="{{ url_for('tools_page') }}" class="btn btn-primary">Browse all PDF tools</a>
+            <a href="{{ url_for('tool_page', tool_id='compress') }}" class="btn btn-secondary">Compress a PDF</a>
         </div>
         <div class="trust-line">22+ PDF tools <span>•</span> Free to use <span>•</span> Files automatically deleted after 30 minutes</div>
     </div>
 </section>
 
-<section class="landing-preview-section">
-    <div class="container landing-preview-grid">
+<section class="landing-preview-section compact-preview-section">
+    <div class="container landing-preview-grid compact-preview-grid">
         <a href="{{ url_for('tools_page') }}" class="landing-preview-card">
-            <span class="preview-icon">🧰</span>
-            <div><strong>All PDF tools</strong><p>Browse, search and filter the complete collection.</p></div>
+            <span class="preview-icon text-icon" aria-hidden="true">PDF</span>
+            <div><strong>All PDF tools</strong><p>Browse the complete collection.</p></div>
+            <span class="preview-arrow">→</span>
+        </a>
+        <a href="https://ferdousbhuiya.github.io/Website_for_dataAnalytics_practice/" target="_blank" rel="noopener noreferrer" class="landing-preview-card">
+            <span class="preview-icon text-icon" aria-hidden="true">DA</span>
+            <div><strong>Other apps</strong><p>Explore my Data Analytics Practice app.</p></div>
             <span class="preview-arrow">→</span>
         </a>
         <a href="{{ url_for('about_page') }}" class="landing-preview-card">
-            <span class="preview-icon">👨‍💻</span>
-            <div><strong>About the project</strong><p>Learn why PDFMaster Pro was built and who created it.</p></div>
+            <span class="preview-icon text-icon" aria-hidden="true">FB</span>
+            <div><strong>About & profiles</strong><p>LinkedIn, GitHub and project background.</p></div>
             <span class="preview-arrow">→</span>
         </a>
-        <a href="{{ url_for('contact_page') }}" class="landing-preview-card">
-            <span class="preview-icon">✉️</span>
-            <div><strong>Feedback & contact</strong><p>Report a problem or suggest a useful improvement.</p></div>
+        <a href="{{ url_for('about_page') }}#support" class="landing-preview-card">
+            <span class="preview-icon text-icon" aria-hidden="true">$</span>
+            <div><strong>Support the project</strong><p>Optional contribution through PayPal.</p></div>
             <span class="preview-arrow">→</span>
         </a>
     </div>
