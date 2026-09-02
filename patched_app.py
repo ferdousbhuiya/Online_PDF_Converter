@@ -1,11 +1,37 @@
 import app as original_app
 from compare_patch import handle_compare_pdf
 from converter_patch import handle_compress_pdf, handle_pdf_to_ppt
+from production_hardening import (
+    make_convert_view,
+    make_download_view,
+    make_health_view,
+    handle_watermark_pdf,
+    handle_page_numbers,
+    handle_sign_pdf,
+    handle_remove_pages,
+    handle_organize_pdf,
+    handle_crop_pdf,
+    handle_ocr_pdf,
+    handle_html_to_pdf,
+)
 
-# Targeted production overrides. process_tool resolves these globals at request
-# time, so the rest of the application remains unchanged.
+# Conversion fixes
 original_app.handle_compare_pdf = handle_compare_pdf
 original_app.handle_compress_pdf = handle_compress_pdf
 original_app.handle_pdf_to_ppt = handle_pdf_to_ppt
+original_app.handle_watermark_pdf = handle_watermark_pdf
+original_app.handle_page_numbers = handle_page_numbers
+original_app.handle_sign_pdf = handle_sign_pdf
+original_app.handle_remove_pages = handle_remove_pages
+original_app.handle_organize_pdf = handle_organize_pdf
+original_app.handle_crop_pdf = handle_crop_pdf
+original_app.handle_ocr_pdf = handle_ocr_pdf
+original_app.handle_html_to_pdf = handle_html_to_pdf
+
+# Route-level hardening. Flask registered the original view functions during
+# import, so replace the registered views explicitly.
+original_app.app.view_functions['convert'] = make_convert_view(original_app)
+original_app.app.view_functions['download'] = make_download_view(original_app)
+original_app.app.view_functions['health_check'] = make_health_view(original_app)
 
 app = original_app.app
