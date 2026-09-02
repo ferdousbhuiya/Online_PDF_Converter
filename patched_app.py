@@ -1,3 +1,18 @@
+import os
+
+# Groq retired llama-3.3-70b-versatile for free/developer usage on 2026-08-16.
+# Normalize the legacy value before importing AI modules so both the homepage
+# assistant and AI PowerPoint use the supported replacement automatically.
+_LEGACY_GROQ_MODELS = {
+    'llama-3.3-70b-versatile': 'openai/gpt-oss-120b',
+    'llama-3.1-8b-instant': 'openai/gpt-oss-20b',
+}
+_configured_groq_model = os.environ.get('GROQ_MODEL', '').strip()
+if not _configured_groq_model:
+    os.environ['GROQ_MODEL'] = 'openai/gpt-oss-120b'
+elif _configured_groq_model in _LEGACY_GROQ_MODELS:
+    os.environ['GROQ_MODEL'] = _LEGACY_GROQ_MODELS[_configured_groq_model]
+
 import app as original_app
 from flask import Response
 from ppt_resilient_patch import handle_pdf_to_ppt
