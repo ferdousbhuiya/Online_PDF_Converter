@@ -9,7 +9,7 @@ from flask import jsonify, request
 
 
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
-DEFAULT_GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+DEFAULT_GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
 
 def _groq_error_message(exc):
@@ -33,7 +33,6 @@ def _groq_error_message(exc):
     if exc.code == 429:
         return "AI service rate limit reached. Please try again shortly.", 429
 
-    # A short Groq-provided detail is useful for non-sensitive service errors.
     if detail and len(detail) <= 220 and "key" not in detail.lower() and "token" not in detail.lower():
         return f"Groq service error: {detail}", 502
     return "AI service is temporarily unavailable.", 502
