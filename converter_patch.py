@@ -40,8 +40,6 @@ def handle_compress_pdf(files, output_dir, form_data):
                 if result.returncode == 0 and os.path.exists(candidate) and os.path.getsize(candidate) > 0:
                     candidates.append(candidate)
 
-        # Pick the smallest successful Ghostscript result, but never return a
-        # larger file than the original.
         if candidates:
             best = min(candidates, key=os.path.getsize)
             if os.path.getsize(best) < original_size:
@@ -49,7 +47,6 @@ def handle_compress_pdf(files, output_dir, form_data):
             else:
                 shutil.copy2(src, output_file)
         else:
-            # Fallback for environments without Ghostscript.
             from pypdf import PdfReader, PdfWriter
             reader = PdfReader(src)
             writer = PdfWriter()
@@ -86,70 +83,225 @@ def handle_compress_pdf(files, output_dir, form_data):
         return {'success': False, 'error': f'Compression failed: {exc}'}
 
 
+def _group_pdf_words_into_lines(words, tolerance=3.0):
+    """Group pdfplumber words into visually aligned text lines."""
+    if not words:
+        return []
+
+    ordered = sorted(words, key=lambda w: (float(w.get('top', 0)), float(w.get('x0', 0))))
+    lines = []
+    for word in ordered:
+        top = float(word.get('top', 0))
+        match = None
+        for line in reversed(lines[-4:]):
+            if abs(line['top'] - top) <= tolerance:
+                match = line
+                break
+        if match is None:
+            match = {'top': top, 'words': []}
+            lines.append(match)
+        match['words'].append(word)
+
+    result = []
+    for line in lines:
+        ws = sorted(line['words'], key=lambda w: float(w.get('x0', 0)))
+        text = ' '.join((w.get('text') or '').strip() for w in ws if (w.get('text') or '').strip())
+        if not text:
+            continue
+        result.append({
+            'text': text,
+            'x0': min(float(w.get('x0', 0)) for w in ws),
+            'x1': max(float(w.get('x1', 0)) for w in ws),
+            'top': min(float(w.get('top', 0)) for w in ws),
+            'bottom': max(float(w.get('bottom', 0)) for w in ws),
+            'size': max(float(w.get('size') or 10) for w in ws),
+        })
+    return result
+
+
+def _region_is_near_white(image, line, page_width, page_height):
+    """Only replace raster text with editable text when its background is near-white.
+
+    This preserves diagrams, colored boxes and photographs instead of covering them
+    with white rectangles.
+    """
+    try:
+        iw, ih = image.size
+        x0 = max(0, int(line['x0'] / page_width * iw) - 2)
+        x1 = min(iw, int(line['x1'] / page_width * iw) + 2)
+        y0 = max(0, int(line['top'] / page_height * ih) - 2)
+        y1 = min(ih, int(line['bottom'] / page_height * ih) + 2)
+        if x1 <= x0 or y1 <= y0:
+            return False
+        region = image.crop((x0, y0, x1, y1)).convert('RGB').resize((1, 1))
+        r, g, b = region.getpixel((0, 0))
+        return min(r, g, b) >= 225
+    except Exception:
+        return False
+
+
 def handle_pdf_to_ppt(files, output_dir, form_data):
-    """Create a high-fidelity PPTX by placing each rendered PDF page on its own slide."""
+    """Convert every PDF page into a faithful PowerPoint slide with editable text.
+
+    The original PDF page is used as the visual base so diagrams/equations/images
+    remain faithful. Text that sits on a near-white background is reconstructed as
+    editable PowerPoint text in the same location. Page count is validated so the
+    converter never silently drops pages.
+    """
+    temp_images = []
     try:
         if not files:
             return {'success': False, 'error': 'No PDF uploaded'}
 
-        from pptx import Presentation
-        from pptx.util import Inches
+        import pdfplumber
         from pdf2image import convert_from_path
+        from pptx import Presentation
+        from pptx.dml.color import RGBColor
+        from pptx.enum.shapes import MSO_SHAPE
+        from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN
+        from pptx.util import Inches, Pt
 
-        images = convert_from_path(files[0], dpi=160, fmt='png')
-        if not images:
-            return {'success': False, 'error': 'The PDF contains no pages'}
+        src = files[0]
+        with pdfplumber.open(src) as pdf:
+            page_count = len(pdf.pages)
+            if page_count == 0:
+                return {'success': False, 'error': 'The PDF contains no pages'}
+            page_meta = []
+            for page in pdf.pages:
+                try:
+                    words = page.extract_words(
+                        use_text_flow=True,
+                        keep_blank_chars=False,
+                        extra_attrs=['size'],
+                    )
+                except Exception:
+                    words = page.extract_words(use_text_flow=True, keep_blank_chars=False)
+                page_meta.append({
+                    'width': float(page.width),
+                    'height': float(page.height),
+                    'lines': _group_pdf_words_into_lines(words),
+                })
+
+        # JPEG keeps the PPTX substantially smaller than full-page PNG while
+        # retaining enough quality for normal documents and diagrams.
+        images = convert_from_path(
+            src,
+            dpi=150,
+            fmt='jpeg',
+            jpegopt={'quality': 88, 'progressive': True, 'optimize': True},
+            thread_count=1,
+        )
+
+        if len(images) != page_count:
+            return {
+                'success': False,
+                'error': f'PDF rendering returned {len(images)} page(s), but the PDF contains {page_count}. No incomplete PPTX was created.'
+            }
 
         prs = Presentation()
-        # Remove the default slide only if a template ever creates one.
         while len(prs.slides):
             rId = prs.slides._sldIdLst[0].rId
             prs.part.drop_rel(rId)
             del prs.slides._sldIdLst[0]
 
-        first_w, first_h = images[0].size
+        first = page_meta[0]
         slide_w = Inches(10)
-        slide_h = int(slide_w * first_h / first_w)
+        slide_h = int(slide_w * first['height'] / first['width'])
         prs.slide_width = slide_w
         prs.slide_height = slide_h
 
-        temp_images = []
-        for idx, image in enumerate(images, start=1):
-            img_path = os.path.join(output_dir, f'ppt_page_{idx}.png')
-            image.save(img_path, 'PNG', optimize=True)
+        editable_line_count = 0
+
+        for idx, (image, meta) in enumerate(zip(images, page_meta), start=1):
+            img_path = os.path.join(output_dir, f'ppt_page_{idx}.jpg')
+            image.save(img_path, 'JPEG', quality=88, optimize=True)
             temp_images.append(img_path)
 
             slide = prs.slides.add_slide(prs.slide_layouts[6])
-            # Fit page without distortion; center if page aspect ratio differs.
-            iw, ih = image.size
-            image_ratio = iw / ih
+
+            page_ratio = meta['width'] / meta['height']
             slide_ratio = prs.slide_width / prs.slide_height
-            if image_ratio >= slide_ratio:
-                width = prs.slide_width
-                height = int(width / image_ratio)
-                left = 0
-                top = int((prs.slide_height - height) / 2)
+            if page_ratio >= slide_ratio:
+                pic_w = prs.slide_width
+                pic_h = int(pic_w / page_ratio)
+                pic_left = 0
+                pic_top = int((prs.slide_height - pic_h) / 2)
             else:
-                height = prs.slide_height
-                width = int(height * image_ratio)
-                top = 0
-                left = int((prs.slide_width - width) / 2)
-            slide.shapes.add_picture(img_path, left, top, width=width, height=height)
+                pic_h = prs.slide_height
+                pic_w = int(pic_h * page_ratio)
+                pic_top = 0
+                pic_left = int((prs.slide_width - pic_w) / 2)
+
+            slide.shapes.add_picture(img_path, pic_left, pic_top, width=pic_w, height=pic_h)
+
+            sx = pic_w / meta['width']
+            sy = pic_h / meta['height']
+
+            # Replace ordinary text on white page areas with editable text. Leave
+            # text over diagrams/colored areas as raster so visual fidelity wins.
+            for line in meta['lines']:
+                if len(line['text']) > 900:
+                    continue
+                if not _region_is_near_white(image, line, meta['width'], meta['height']):
+                    continue
+
+                left = int(pic_left + line['x0'] * sx)
+                top = int(pic_top + line['top'] * sy)
+                width = max(int((line['x1'] - line['x0']) * sx) + 6, int(Inches(0.2)))
+                height = max(int((line['bottom'] - line['top']) * sy * 1.35), int(Pt(line['size'] * 1.35)))
+
+                # Cover only the original text strip, preserving all other page art.
+                cover = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left - 2, top - 1, width + 4, height + 2)
+                cover.fill.solid()
+                cover.fill.fore_color.rgb = RGBColor(255, 255, 255)
+                cover.line.fill.background()
+
+                textbox = slide.shapes.add_textbox(left, top, width, height)
+                tf = textbox.text_frame
+                tf.clear()
+                tf.margin_left = 0
+                tf.margin_right = 0
+                tf.margin_top = 0
+                tf.margin_bottom = 0
+                tf.word_wrap = False
+                tf.auto_size = MSO_AUTO_SIZE.NONE
+
+                p = tf.paragraphs[0]
+                p.alignment = PP_ALIGN.LEFT
+                p.space_before = 0
+                p.space_after = 0
+                run = p.add_run()
+                run.text = line['text']
+                run.font.name = 'Arial'
+                run.font.size = Pt(max(6.0, min(36.0, line['size'] * 0.98)))
+                run.font.color.rgb = RGBColor(0, 0, 0)
+                editable_line_count += 1
 
         output_file = os.path.join(output_dir, 'converted.pptx')
         prs.save(output_file)
 
-        for img_path in temp_images:
-            try:
-                os.remove(img_path)
-            except OSError:
-                pass
+        if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
+            return {'success': False, 'error': 'PowerPoint file was not created'}
+        if len(prs.slides) != page_count:
+            return {
+                'success': False,
+                'error': f'PowerPoint validation failed: expected {page_count} slide(s), created {len(prs.slides)}.'
+            }
 
         return {
             'success': True,
             'download_url': f'/download/{os.path.basename(output_dir)}/converted.pptx',
             'filename': 'converted.pptx',
-            'message': f'Converted {len(images)} PDF page(s) to high-fidelity PowerPoint slides.',
+            'message': (
+                f'Converted {page_count} PDF page(s) to {page_count} PowerPoint slide(s). '
+                f'Preserved the original page appearance and reconstructed {editable_line_count} text line(s) as editable content.'
+            ),
         }
     except Exception as exc:
         return {'success': False, 'error': f'PDF to PowerPoint failed: {exc}'}
+    finally:
+        for img_path in temp_images:
+            try:
+                os.remove(img_path)
+            except OSError:
+                pass
