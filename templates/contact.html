@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Contact{% endblock %}
+{% block content %}
+<section class="page-intro compact-page-intro">
+    <div class="container narrow-page">
+        <span class="section-eyebrow">Contact</span>
+        <h1>Help improve PDFMaster Pro</h1>
+        <p>Send a suggestion, report a problem or share an idea for a useful improvement.</p>
+    </div>
+</section>
+<section class="content-page-section">
+    <div class="container contact-page-layout">
+        <div class="contact-note-card">
+            <h2>Send a message</h2>
+            <p>Your feedback helps prioritize fixes, conversion quality improvements and new PDF tools.</p>
+            <div class="contact-note-item"><strong>Bug report</strong><span>Tell me which tool you used and what happened.</span></div>
+            <div class="contact-note-item"><strong>Feature idea</strong><span>Describe the workflow you would like to make easier.</span></div>
+        </div>
+        <form action="{{ url_for('send_email') }}" method="POST" class="compact-contact-form contact-page-form">
+            <div class="form-row">
+                <div><label for="name">Your name</label><input id="name" type="text" name="name" required class="form-control" placeholder="Your name"></div>
+                <div><label for="email">Your email</label><input id="email" type="email" name="email" required class="form-control" placeholder="you@example.com"></div>
+            </div>
+            <div><label for="subject">Subject</label><input id="subject" type="text" name="subject" required class="form-control" placeholder="Feature request / Bug report"></div>
+            <div><label for="message">Message</label><textarea id="message" name="message" rows="6" required class="form-control" placeholder="Tell me what you would like to improve..."></textarea></div>
+            <button type="submit" class="btn btn-primary">Send message</button>
+        </form>
+    </div>
+</section>
+{% endblock %}
