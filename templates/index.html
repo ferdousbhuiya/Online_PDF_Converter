@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/profile-home.css') }}?v=20260902-a">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/profile-home.css') }}?v=20260902-ai">{% endblock %}
 {% block content %}
 <section class="home-hero home-hero-focused compact-home-hero">
     <div class="container home-hero-inner">
@@ -11,6 +11,34 @@
             <a href="{{ url_for('tool_page', tool_id='compress') }}" class="btn btn-secondary">Compress a PDF</a>
         </div>
         <div class="trust-line">22+ PDF tools <span>•</span> Free to use <span>•</span> Files automatically deleted after 30 minutes</div>
+    </div>
+</section>
+
+<section class="ai-home-section">
+    <div class="container">
+        <div class="ai-home-card">
+            <div class="ai-home-copy">
+                <span class="ai-home-badge">AI EXTRA</span>
+                <h2>Ask PDFMaster AI</h2>
+                <p>Ask a normal question, get help choosing the right PDF tool, or ask how to complete a document task.</p>
+                <div class="ai-question-chips">
+                    <button type="button" data-ai-question="Which tool should I use to make a scanned PDF searchable?">Make a scanned PDF searchable</button>
+                    <button type="button" data-ai-question="How can I reduce PDF size without losing too much quality?">Reduce PDF size</button>
+                    <button type="button" data-ai-question="What is the difference between Fill PDF and Sign PDF?">Fill vs Sign PDF</button>
+                </div>
+            </div>
+            <div class="ai-home-panel">
+                <form id="aiAskForm" class="ai-ask-form">
+                    <label for="aiQuestion">Your question</label>
+                    <textarea id="aiQuestion" maxlength="2000" rows="4" placeholder="Ask anything, for example: Which PDF tool should I use for this task?"></textarea>
+                    <div class="ai-ask-actions">
+                        <span>Powered by Groq AI</span>
+                        <button type="submit" id="aiAskButton" class="btn ai-ask-button">Ask AI</button>
+                    </div>
+                </form>
+                <div id="aiAnswer" class="ai-answer" hidden></div>
+            </div>
+        </div>
     </div>
 </section>
 
@@ -39,3 +67,4 @@
     </div>
 </section>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/ai-home.js') }}?v=20260902-ai"></script>{% endblock %}
