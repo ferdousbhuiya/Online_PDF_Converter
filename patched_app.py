@@ -2,6 +2,7 @@ import app as original_app
 from flask import Response
 from compare_patch import handle_compare_pdf
 from converter_patch import handle_compress_pdf, handle_pdf_to_ppt
+from extract_images_patch import handle_extract_images
 from fill_pdf_patch import handle_fill_pdf, make_pdf_fields_view
 from frontend_pages import make_home_view, make_tools_view, about_page, contact_page
 from office_patch import make_word_to_pdf_handler
@@ -27,6 +28,7 @@ original_app.handle_word_to_pdf = make_word_to_pdf_handler(original_app)
 original_app.handle_watermark_pdf = handle_watermark_pdf
 original_app.handle_page_numbers = handle_page_numbers
 original_app.handle_sign_pdf = handle_sign_pdf
+original_app.handle_extract_images = handle_extract_images
 original_app.handle_remove_pages = handle_remove_pages
 original_app.handle_organize_pdf = handle_organize_pdf
 original_app.handle_crop_pdf = handle_crop_pdf
