@@ -1,6 +1,6 @@
 import app as original_app
 from flask import Response
-from ai_ppt_patch import handle_pdf_to_ppt
+from ppt_resilient_patch import handle_pdf_to_ppt
 from compare_patch import handle_compare_pdf
 from converter_patch import handle_compress_pdf
 from extract_images_patch import handle_extract_images
