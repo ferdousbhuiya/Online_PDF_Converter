@@ -1,4 +1,4 @@
-/** PDFMaster Pro - frontend behavior (technical fixes only). */
+/** PDFMaster Pro - frontend behavior. */
 
 let selectedFiles = [];
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
@@ -30,9 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const icon = card.querySelector('.tool-icon');
         if (icon) icon.style.background = `linear-gradient(135deg, ${color} 0%, ${color}cc 100%)`;
     });
-    document.querySelectorAll('.tool-badge').forEach(badge => {
-        if (badge.dataset.toolColor) badge.style.setProperty('--tool-color', badge.dataset.toolColor);
-    });
 
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function (e) {
@@ -43,6 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    initializeSignaturePreview();
 });
 
 function handleFiles(fileList) {
@@ -64,6 +63,7 @@ function handleFiles(fileList) {
         alert('Compare PDFs accepts exactly two PDF files.');
     }
     updateFileList();
+    if (toolId === 'fill_pdf' && selectedFiles[0]) inspectFillablePdf(selectedFiles[0]);
 }
 
 function updateFileList() {
@@ -91,11 +91,9 @@ function updateFileList() {
     selectedFiles.forEach((file, index) => {
         const item = document.createElement('div');
         item.className = 'file-item';
-
         const icon = document.createElement('div');
         icon.className = 'file-item-icon';
         icon.textContent = getFileIcon(file.name);
-
         const info = document.createElement('div');
         info.className = 'file-item-info';
         const name = document.createElement('div');
@@ -105,13 +103,11 @@ function updateFileList() {
         size.className = 'file-item-size';
         size.textContent = formatFileSize(file.size);
         info.append(name, size);
-
         const remove = document.createElement('button');
         remove.className = 'file-item-remove';
         remove.type = 'button';
         remove.textContent = '✕';
         remove.addEventListener('click', () => removeFile(index));
-
         item.append(icon, info, remove);
         fileItems.appendChild(item);
     });
@@ -120,22 +116,20 @@ function updateFileList() {
 function removeFile(index) {
     selectedFiles.splice(index, 1);
     updateFileList();
+    if (!selectedFiles.length) resetFillFields();
 }
 
 function clearFiles() {
     selectedFiles = [];
     const input = document.getElementById('fileInput');
     if (input) input.value = '';
+    resetFillFields();
     updateFileList();
 }
 
 function getFileIcon(filename) {
     const ext = (filename.split('.').pop() || '').toLowerCase();
-    const icons = {
-        pdf: '📄', doc: '📝', docx: '📝', xls: '📊', xlsx: '📊',
-        ppt: '📽️', pptx: '📽️', jpg: '🖼️', jpeg: '🖼️', png: '🎨',
-        gif: '🎭', bmp: '🖼️', webp: '🖼️', html: '🌐', htm: '🌐'
-    };
+    const icons = {pdf:'📄',doc:'📝',docx:'📝',xls:'📊',xlsx:'📊',ppt:'📽️',pptx:'📽️',jpg:'🖼️',jpeg:'🖼️',png:'🎨',gif:'🎭',bmp:'🖼️',webp:'🖼️',html:'🌐',htm:'🌐'};
     return icons[ext] || '📁';
 }
 
@@ -161,6 +155,7 @@ function startConversion() {
         alert('Please select at least two PDF files to merge.');
         return;
     }
+    if (toolId === 'fill_pdf') collectFillFieldValues();
 
     const formData = new FormData();
     formData.append('tool_id', toolId);
@@ -189,11 +184,8 @@ function startConversion() {
         .then(async response => {
             const contentType = response.headers.get('content-type') || '';
             let payload;
-            if (contentType.includes('application/json')) {
-                payload = await response.json();
-            } else {
-                payload = {success: false, error: await response.text() || response.statusText};
-            }
+            if (contentType.includes('application/json')) payload = await response.json();
+            else payload = {success: false, error: await response.text() || response.statusText};
             if (!response.ok) throw new Error(payload.error || `Server error ${response.status}`);
             return payload;
         })
@@ -209,7 +201,7 @@ function startConversion() {
 }
 
 function showProgress() {
-    ['uploadArea', 'fileList', 'toolOptions', 'convertSection', 'resultSection', 'errorSection'].forEach(id => {
+    ['uploadArea','fileList','toolOptions','convertSection','resultSection','errorSection'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
@@ -242,12 +234,22 @@ function resetTool() {
     if (fileInput) fileInput.value = '';
     const signatureInput = document.querySelector('input[name="signature_image"]');
     if (signatureInput) signatureInput.value = '';
+    resetFillFields();
     document.getElementById('uploadArea').style.display = 'block';
-    ['fileList', 'toolOptions', 'convertSection', 'progressSection', 'resultSection', 'errorSection'].forEach(id => {
+    ['fileList','toolOptions','convertSection','progressSection','resultSection','errorSection'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
     document.getElementById('progressFill').style.width = '0%';
+}
+
+function initializeSignaturePreview() {
+    const dateInput = document.getElementById('signatureDate');
+    if (dateInput && !dateInput.value) {
+        const now = new Date();
+        dateInput.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    }
+    updateSignaturePreview();
 }
 
 function toggleSignatureOptions() {
@@ -258,4 +260,128 @@ function toggleSignatureOptions() {
     const imageMode = select.value === 'image';
     textOptions.style.display = imageMode ? 'none' : 'block';
     imageOptions.style.display = imageMode ? 'block' : 'none';
+    if (!imageMode) updateSignaturePreview();
+}
+
+function updateSignaturePreview() {
+    const preview = document.getElementById('signaturePreview');
+    if (!preview) return;
+    const text = document.getElementById('signatureText')?.value.trim() || 'Your Name';
+    const style = document.getElementById('signatureStyle')?.value || 'formal';
+    const font = document.getElementById('signatureFont')?.value || 'Helvetica-Oblique';
+    const size = Number(document.getElementById('signatureSize')?.value || 30);
+    const includeDate = document.getElementById('includeSignatureDate')?.value === 'yes';
+    const dateValue = document.getElementById('signatureDate')?.value;
+    const nameEl = document.getElementById('signaturePreviewName');
+    const lineEl = document.getElementById('signaturePreviewLine');
+    const metaEl = document.getElementById('signaturePreviewMeta');
+    const dateEl = document.getElementById('signaturePreviewDate');
+
+    nameEl.textContent = text;
+    nameEl.style.fontFamily = font === 'Times-Italic' ? 'Georgia, serif' : font === 'Courier-Oblique' ? 'Courier New, monospace' : 'cursive';
+    nameEl.style.fontSize = `${Math.max(22, Math.min(48, size * 1.05))}px`;
+    lineEl.style.display = style === 'classic' ? 'none' : 'block';
+    metaEl.style.display = style === 'classic' ? 'none' : 'flex';
+    if (dateEl) {
+        if (style === 'formal' && includeDate && dateValue) {
+            const d = new Date(`${dateValue}T12:00:00`);
+            dateEl.textContent = d.toLocaleDateString(undefined, {year:'numeric', month:'short', day:'numeric'});
+        } else dateEl.textContent = '';
+    }
+}
+
+function updateSignatureImagePreview(input) {
+    const wrap = document.getElementById('signatureImagePreviewWrap');
+    const img = document.getElementById('signatureImagePreview');
+    if (!wrap || !img || !input.files?.[0]) return;
+    img.src = URL.createObjectURL(input.files[0]);
+    wrap.style.display = 'block';
+}
+
+async function inspectFillablePdf(file) {
+    const status = document.getElementById('fillPdfStatus');
+    const container = document.getElementById('fillFieldsContainer');
+    if (!status || !container) return;
+    status.textContent = 'Detecting fillable fields…';
+    container.innerHTML = '';
+    const body = new FormData();
+    body.append('file', file);
+    try {
+        const response = await fetch('/pdf-fields', {method:'POST', body});
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Unable to inspect this PDF');
+        if (!data.fields.length) {
+            status.textContent = 'No interactive form fields were found in this PDF.';
+            return;
+        }
+        status.textContent = `${data.count} fillable field${data.count === 1 ? '' : 's'} detected.`;
+        data.fields.forEach(renderFillField);
+    } catch (error) {
+        status.textContent = error.message || 'Unable to detect PDF form fields.';
+    }
+}
+
+function renderFillField(field) {
+    const container = document.getElementById('fillFieldsContainer');
+    const group = document.createElement('div');
+    group.className = 'option-group fill-field';
+    const label = document.createElement('label');
+    label.textContent = field.label || field.name;
+    let input;
+
+    if (field.type === 'choice' && field.options?.length) {
+        input = document.createElement('select');
+        input.className = 'form-control';
+        const blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = 'Select…';
+        input.appendChild(blank);
+        field.options.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.label;
+            input.appendChild(option);
+        });
+    } else if (field.type === 'button') {
+        input = document.createElement('select');
+        input.className = 'form-control';
+        const off = document.createElement('option');
+        off.value = '/Off';
+        off.textContent = 'Unchecked';
+        input.appendChild(off);
+        (field.button_options || ['/Yes']).forEach(value => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = 'Checked';
+            input.appendChild(option);
+        });
+    } else {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-control';
+        input.value = field.value && field.value !== 'None' ? field.value : '';
+    }
+
+    input.dataset.pdfField = field.name;
+    group.append(label, input);
+    container.appendChild(group);
+}
+
+function collectFillFieldValues() {
+    const hidden = document.getElementById('fillFieldValues');
+    if (!hidden) return;
+    const values = {};
+    document.querySelectorAll('[data-pdf-field]').forEach(input => {
+        values[input.dataset.pdfField] = input.value;
+    });
+    hidden.value = JSON.stringify(values);
+}
+
+function resetFillFields() {
+    const container = document.getElementById('fillFieldsContainer');
+    const status = document.getElementById('fillPdfStatus');
+    const hidden = document.getElementById('fillFieldValues');
+    if (container) container.innerHTML = '';
+    if (status) status.textContent = 'Select a PDF with interactive form fields. PDFMaster Pro will detect the fields automatically.';
+    if (hidden) hidden.value = '{}';
 }
