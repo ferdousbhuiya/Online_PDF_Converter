@@ -11,10 +11,12 @@ Add these environment variables to the PDFMaster Pro application before deployin
 
 ```text
 GROQ_API_KEY=<your existing Groq API key>
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=openai/gpt-oss-120b
 ```
 
-`GROQ_MODEL` is optional. If omitted, the application uses the model above by default. If that Groq model is retired later, change only the environment variable; no code change is required.
+`GROQ_MODEL` is optional. If omitted, the application uses `openai/gpt-oss-120b` by default.
+
+Groq retired `llama-3.3-70b-versatile` for free/developer-tier usage on August 16, 2026. PDFMaster Pro also normalizes that legacy model ID to `openai/gpt-oss-120b` at startup so an older Coolify value does not break the homepage AI assistant or AI PowerPoint mode.
 
 The API key is read only by the Flask backend. It is never sent to browser JavaScript or stored in generated PowerPoint files.
 
