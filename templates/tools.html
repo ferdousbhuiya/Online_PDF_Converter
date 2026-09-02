@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}All PDF Tools{% endblock %}
+{% block content %}
+<section class="page-intro compact-page-intro">
+    <div class="container">
+        <span class="section-eyebrow">All tools</span>
+        <h1>Choose the PDF tool you need</h1>
+        <p>Search or filter the complete collection without scrolling through unrelated content.</p>
+    </div>
+</section>
+
+<section class="tools-section home-tools-section standalone-tools-page">
+    <div class="container">
+        <div class="tools-heading-row tools-page-controls">
+            <div class="category-filters" id="categoryFilters">
+                <button type="button" class="category-filter active" data-category="all">All</button>
+                {% for category_key, category in categories.items() %}
+                    {% if category.tools %}
+                    <button type="button" class="category-filter" data-category="{{ category_key }}">{{ category.name }}</button>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <div class="tool-search-wrap">
+                <span class="tool-search-icon">⌕</span>
+                <input id="toolSearch" class="tool-search" type="search" placeholder="Search PDF tools..." autocomplete="off" aria-label="Search PDF tools">
+            </div>
+        </div>
+
+        <div class="home-tool-grid" id="homeToolGrid">
+            {% for category_key, category in categories.items() %}
+                {% for tool in category.tools %}
+                <a href="{{ url_for('tool_page', tool_id=tool.id) }}"
+                   class="home-tool-card tool-card"
+                   data-tool-color="{{ tool.color }}"
+                   data-category="{{ category_key }}"
+                   data-search="{{ tool.name|lower }} {{ tool.description|lower }} {{ category.name|lower }}">
+                    <div class="home-tool-icon tool-icon">{{ tool.icon }}</div>
+                    <div class="home-tool-copy tool-info">
+                        <h4>{{ tool.name }}</h4>
+                        <p>{{ tool.description }}</p>
+                    </div>
+                    <span class="home-tool-arrow">→</span>
+                </a>
+                {% endfor %}
+            {% endfor %}
+        </div>
+        <div id="noToolResults" class="no-tool-results" hidden>No matching tools found. Try another search.</div>
+    </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const search = document.getElementById('toolSearch');
+    const filters = Array.from(document.querySelectorAll('.category-filter'));
+    const cards = Array.from(document.querySelectorAll('.home-tool-card'));
+    const empty = document.getElementById('noToolResults');
+    let activeCategory = 'all';
+
+    function updateTools() {
+        const query = (search.value || '').trim().toLowerCase();
+        let visible = 0;
+        cards.forEach(card => {
+            const categoryMatch = activeCategory === 'all' || card.dataset.category === activeCategory;
+            const searchMatch = !query || card.dataset.search.includes(query);
+            const show = categoryMatch && searchMatch;
+            card.hidden = !show;
+            if (show) visible += 1;
+        });
+        empty.hidden = visible !== 0;
+    }
+
+    filters.forEach(button => button.addEventListener('click', function () {
+        activeCategory = this.dataset.category;
+        filters.forEach(item => item.classList.toggle('active', item === this));
+        updateTools();
+    }));
+    search.addEventListener('input', updateTools);
+});
+</script>
+{% endblock %}
