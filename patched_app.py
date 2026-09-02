@@ -1,7 +1,8 @@
 import app as original_app
 from flask import Response
+from ai_ppt_patch import handle_pdf_to_ppt
 from compare_patch import handle_compare_pdf
-from converter_patch import handle_compress_pdf, handle_pdf_to_ppt
+from converter_patch import handle_compress_pdf
 from extract_images_patch import handle_extract_images
 from fill_pdf_patch import handle_fill_pdf, make_pdf_fields_view
 from frontend_pages import make_home_view, make_tools_view, about_page, contact_page
