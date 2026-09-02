@@ -5,13 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}PDFMaster Pro{% endblock %} - All-in-One PDF Tools</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260901-ui4') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/pages.css', v='20260901-ui4') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/icon.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/icon.png') }}">
-    <style>
-        .footer-rich{background:#111827;color:#d1d5db;padding:26px 0 14px}.footer-rich-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:34px;align-items:start}.footer-rich-brand{display:flex;gap:12px;align-items:flex-start}.footer-rich-brand img{width:34px!important;height:34px!important;max-width:34px!important;object-fit:contain}.footer-rich h4{color:#fff;font-size:.9rem;margin-bottom:8px}.footer-rich p,.footer-rich a{font-size:.78rem;line-height:1.55}.footer-rich p{color:#9ca3af;max-width:430px}.footer-rich ul{list-style:none}.footer-rich li{margin:4px 0}.footer-rich a{color:#cbd5e1;text-decoration:none}.footer-rich a:hover{color:#fff}.footer-rich-bottom{border-top:1px solid #273244;margin-top:18px;padding-top:11px;display:flex;justify-content:space-between;gap:20px;color:#6b7280;font-size:.72rem}.footer-rich-note{color:#9ca3af}@media(max-width:760px){.footer-rich-grid{grid-template-columns:1fr 1fr}.footer-rich-brand{grid-column:1/-1}.footer-rich-bottom{flex-direction:column;gap:4px}}@media(max-width:480px){.footer-rich-grid{grid-template-columns:1fr}.footer-rich-brand{grid-column:auto}}
-    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -22,9 +20,9 @@
             </a>
             <div class="nav-links">
                 <a href="{{ url_for('index') }}">Home</a>
-                <a href="{{ url_for('index') }}#tools">All Tools</a>
-                <a href="{{ url_for('index') }}#about">About</a>
-                <a href="{{ url_for('index') }}#contact">Contact</a>
+                <a href="{{ url_for('tools_page') }}">All Tools</a>
+                <a href="{{ url_for('about_page') }}">About</a>
+                <a href="{{ url_for('contact_page') }}">Contact</a>
             </div>
         </div>
     </nav>
@@ -42,39 +40,33 @@
         {% endwith %}
     </main>
 
-    <footer class="footer-rich">
-        <div class="container">
-            <div class="footer-rich-grid">
-                <div class="footer-rich-brand">
-                    <img src="{{ url_for('static', filename='images/icon.png') }}" alt="PDFMaster Pro">
-                    <div>
-                        <h4>PDFMaster Pro</h4>
-                        <p>Your complete PDF solution for converting, merging, splitting, compressing, organizing, protecting and editing documents in one place.</p>
-                    </div>
+    <footer class="footer compact-footer rich-footer">
+        <div class="container rich-footer-grid">
+            <div class="rich-footer-brand">
+                <div class="footer-brand">
+                    <img src="{{ url_for('static', filename='images/icon.png') }}" alt="PDFMaster Pro" class="footer-icon">
+                    <span>PDFMaster Pro</span>
                 </div>
-                <div>
-                    <h4>Quick Links</h4>
-                    <ul>
-                        <li><a href="{{ url_for('index') }}">Home</a></li>
-                        <li><a href="{{ url_for('index') }}#tools">All PDF Tools</a></li>
-                        <li><a href="{{ url_for('index') }}#about">About</a></li>
-                        <li><a href="{{ url_for('index') }}#contact">Contact & Feedback</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4>Popular Tools</h4>
-                    <ul>
-                        <li><a href="{{ url_for('tool_page', tool_id='merge') }}">Merge PDF</a></li>
-                        <li><a href="{{ url_for('tool_page', tool_id='pdf_to_word') }}">PDF to Word</a></li>
-                        <li><a href="{{ url_for('tool_page', tool_id='compress') }}">Compress PDF</a></li>
-                        <li><a href="{{ url_for('tool_page', tool_id='pdf_to_ppt') }}">PDF to PowerPoint</a></li>
-                    </ul>
-                </div>
+                <p>Your complete PDF solution for converting, organizing, optimizing and securing documents.</p>
+                <small>Temporary uploaded files are automatically removed after processing.</small>
             </div>
-            <div class="footer-rich-bottom">
-                <span>&copy; 2026 PDFMaster Pro. All rights reserved.</span>
-                <span class="footer-rich-note">Fast, private processing · Temporary files automatically deleted</span>
+            <div class="rich-footer-column">
+                <strong>Quick Links</strong>
+                <a href="{{ url_for('index') }}">Home</a>
+                <a href="{{ url_for('tools_page') }}">All Tools</a>
+                <a href="{{ url_for('about_page') }}">About</a>
+                <a href="{{ url_for('contact_page') }}">Contact</a>
             </div>
+            <div class="rich-footer-column">
+                <strong>Popular Tools</strong>
+                <a href="{{ url_for('tool_page', tool_id='merge') }}">Merge PDF</a>
+                <a href="{{ url_for('tool_page', tool_id='pdf_to_word') }}">PDF to Word</a>
+                <a href="{{ url_for('tool_page', tool_id='compress') }}">Compress PDF</a>
+            </div>
+        </div>
+        <div class="container rich-footer-bottom">
+            <span>&copy; 2026 PDFMaster Pro. All rights reserved.</span>
+            <span>Fast · Private · Practical PDF tools</span>
         </div>
     </footer>
 
