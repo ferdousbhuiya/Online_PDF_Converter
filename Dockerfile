@@ -2,6 +2,7 @@ FROM python:3.11
 
 # System tools required by document conversion, PDF rendering, OCR and compression.
 # Carlito/Caladea improve Microsoft Office layout fidelity (Calibri/Cambria substitutes).
+# Noto/Lohit Bengali provide reliable Bengali glyph coverage for LibreOffice conversions.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer \
     libreoffice-calc \
@@ -19,6 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     fonts-crosextra-carlito \
     fonts-crosextra-caladea \
+    fonts-noto-core \
+    fonts-lohit-beng-bengali \
     && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
