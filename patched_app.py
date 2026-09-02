@@ -5,6 +5,7 @@ from compare_patch import handle_compare_pdf
 from converter_patch import handle_compress_pdf
 from extract_images_patch import handle_extract_images
 from fill_pdf_patch import handle_fill_pdf, make_pdf_fields_view
+from metadata_patch import handle_edit_metadata, make_pdf_metadata_view
 from frontend_pages import make_home_view, make_tools_view, about_page, contact_page
 from office_patch import make_word_to_pdf_handler
 from signature_patch import handle_sign_pdf
@@ -30,6 +31,7 @@ original_app.handle_watermark_pdf = handle_watermark_pdf
 original_app.handle_page_numbers = handle_page_numbers
 original_app.handle_sign_pdf = handle_sign_pdf
 original_app.handle_extract_images = handle_extract_images
+original_app.handle_edit_metadata = handle_edit_metadata
 original_app.handle_remove_pages = handle_remove_pages
 original_app.handle_organize_pdf = handle_organize_pdf
 original_app.handle_crop_pdf = handle_crop_pdf
@@ -55,6 +57,8 @@ _original_process_tool = original_app.process_tool
 def process_tool_with_fill(tool_id, files, output_dir, form_data):
     if tool_id == 'fill_pdf':
         return handle_fill_pdf(files, output_dir, form_data)
+    if tool_id == 'edit_metadata':
+        return handle_edit_metadata(files, output_dir, form_data)
     return _original_process_tool(tool_id, files, output_dir, form_data)
 
 
@@ -66,6 +70,7 @@ original_app.app.view_functions['convert'] = make_convert_view(original_app)
 original_app.app.view_functions['download'] = make_download_view(original_app)
 original_app.app.view_functions['health_check'] = make_health_view(original_app)
 original_app.app.add_url_rule('/pdf-fields', endpoint='pdf_fields', view_func=make_pdf_fields_view(), methods=['POST'])
+original_app.app.add_url_rule('/pdf-metadata', endpoint='pdf_metadata', view_func=make_pdf_metadata_view(), methods=['POST'])
 
 # UI routes: keep the landing page focused and give each navigation item its own page.
 original_app.app.view_functions['index'] = make_home_view(original_app)
