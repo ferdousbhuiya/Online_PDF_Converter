@@ -2,6 +2,7 @@ import app as original_app
 from compare_patch import handle_compare_pdf
 from converter_patch import handle_compress_pdf, handle_pdf_to_ppt
 from frontend_pages import make_home_view, make_tools_view, about_page, contact_page
+from office_patch import make_word_to_pdf_handler
 from production_hardening import (
     make_convert_view,
     make_download_view,
@@ -20,6 +21,7 @@ from production_hardening import (
 original_app.handle_compare_pdf = handle_compare_pdf
 original_app.handle_compress_pdf = handle_compress_pdf
 original_app.handle_pdf_to_ppt = handle_pdf_to_ppt
+original_app.handle_word_to_pdf = make_word_to_pdf_handler(original_app)
 original_app.handle_watermark_pdf = handle_watermark_pdf
 original_app.handle_page_numbers = handle_page_numbers
 original_app.handle_sign_pdf = handle_sign_pdf
