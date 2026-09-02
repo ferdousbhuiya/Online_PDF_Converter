@@ -64,6 +64,7 @@ function handleFiles(fileList) {
     }
     updateFileList();
     if (toolId === 'fill_pdf' && selectedFiles[0]) inspectFillablePdf(selectedFiles[0]);
+    if (toolId === 'edit_metadata' && selectedFiles[0]) inspectPdfMetadata(selectedFiles[0]);
 }
 
 function updateFileList() {
@@ -116,7 +117,10 @@ function updateFileList() {
 function removeFile(index) {
     selectedFiles.splice(index, 1);
     updateFileList();
-    if (!selectedFiles.length) resetFillFields();
+    if (!selectedFiles.length) {
+        resetFillFields();
+        resetMetadataFields();
+    }
 }
 
 function clearFiles() {
@@ -124,6 +128,7 @@ function clearFiles() {
     const input = document.getElementById('fileInput');
     if (input) input.value = '';
     resetFillFields();
+    resetMetadataFields();
     updateFileList();
 }
 
@@ -235,6 +240,7 @@ function resetTool() {
     const signatureInput = document.querySelector('input[name="signature_image"]');
     if (signatureInput) signatureInput.value = '';
     resetFillFields();
+    resetMetadataFields();
     document.getElementById('uploadArea').style.display = 'block';
     ['fileList','toolOptions','convertSection','progressSection','resultSection','errorSection'].forEach(id => {
         const el = document.getElementById(id);
@@ -384,4 +390,61 @@ function resetFillFields() {
     if (container) container.innerHTML = '';
     if (status) status.textContent = 'Select a PDF with interactive form fields. PDFMaster Pro will detect the fields automatically.';
     if (hidden) hidden.value = '{}';
+}
+
+async function inspectPdfMetadata(file) {
+    const status = document.getElementById('metadataStatus');
+    if (!status) return;
+    resetMetadataFields(false);
+    status.textContent = 'Reading current PDF metadata…';
+    const body = new FormData();
+    body.append('file', file);
+
+    try {
+        const response = await fetch('/pdf-metadata', {method:'POST', body});
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Unable to inspect PDF metadata');
+        const metadata = data.metadata || {};
+        const mapping = {
+            title: 'metadataTitle',
+            author: 'metadataAuthor',
+            subject: 'metadataSubject',
+            keywords: 'metadataKeywords',
+            creator: 'metadataCreator',
+            producer: 'metadataProducer'
+        };
+        Object.entries(mapping).forEach(([key, id]) => {
+            const input = document.getElementById(id);
+            if (input) input.value = metadata[key] || '';
+        });
+        status.textContent = data.populated_count
+            ? `${data.populated_count} existing metadata field${data.populated_count === 1 ? '' : 's'} loaded. Edit any value or choose Remove all metadata.`
+            : 'No standard metadata values were found. You can add new metadata below.';
+    } catch (error) {
+        status.textContent = error.message || 'Unable to read metadata from this PDF.';
+    }
+}
+
+function toggleMetadataRemoval() {
+    const checkbox = document.getElementById('removeAllMetadata');
+    const fields = document.querySelectorAll('#metadataFields input');
+    const removing = Boolean(checkbox?.checked);
+    fields.forEach(input => input.disabled = removing);
+    const status = document.getElementById('metadataStatus');
+    if (status && removing) status.textContent = 'All stored PDF metadata will be removed. The visible document content will not change.';
+    if (status && !removing && selectedFiles[0]) inspectPdfMetadata(selectedFiles[0]);
+}
+
+function resetMetadataFields(resetStatus = true) {
+    ['metadataTitle','metadataAuthor','metadataSubject','metadataKeywords','metadataCreator','metadataProducer'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.value = '';
+            input.disabled = false;
+        }
+    });
+    const checkbox = document.getElementById('removeAllMetadata');
+    if (checkbox) checkbox.checked = false;
+    const status = document.getElementById('metadataStatus');
+    if (status && resetStatus) status.textContent = 'Select a PDF. Its current metadata will be loaded automatically.';
 }
