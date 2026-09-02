@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}About{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/profile-home.css') }}?v=20260902-a">{% endblock %}
 {% block content %}
 <section class="page-intro compact-page-intro">
     <div class="container narrow-page">
@@ -43,7 +44,7 @@
             </a>
         </div>
 
-        <div class="support-card">
+        <div class="support-card" id="support">
             <div>
                 <span class="section-eyebrow">Support the project</span>
                 <h3>Help keep the tools improving</h3>
