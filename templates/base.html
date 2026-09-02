@@ -4,33 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}PDFMaster Pro{% endblock %} - All-in-One PDF Tools</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260901-ui2') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/icon.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/icon.png') }}">
 </head>
 <body>
-    <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
             <a href="{{ url_for('index') }}" class="logo">
-                <img src="{{ url_for('static', filename='images/Logo.png') }}" alt="PDFMaster Pro" class="logo-img">
+                <img src="{{ url_for('static', filename='images/icon.png') }}" alt="PDFMaster Pro" class="logo-img">
                 <span class="logo-text">PDFMaster<span class="logo-pro">Pro</span></span>
             </a>
             <div class="nav-links">
                 <a href="{{ url_for('index') }}">Home</a>
-                <a href="#tools">All Tools</a>
-                <a href="#about">About me</a>
-                <a href="#contact">Contact</a>
+                <a href="{{ url_for('index') }}#tools">All Tools</a>
+                <a href="{{ url_for('index') }}#about">About</a>
+                <a href="{{ url_for('index') }}#contact">Contact</a>
             </div>
         </div>
     </nav>
 
-    <!-- Main Content -->
     <main>
         {% block content %}{% endblock %}
-            <!-- Flash Messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <div class="flash-messages">
@@ -42,38 +39,22 @@
         {% endwith %}
     </main>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <img src="{{ url_for('static', filename='images/Logo.png') }}" alt="PDFMaster Pro" class="footer-logo">
-                    <p>Your complete PDF solution. Convert, merge, split, and edit PDFs with ease.</p>
-                </div>
-                <div class="footer-section">
-                    <h4>Quick Links</h4>
-                    <ul>
-                        <li><a href="{{ url_for('index') }}">Home</a></li>
-                        <li><a href="#tools">All Tools</a></li>
-                        <li><a href="#about">About Us</a></li>
-                    </ul>
-                </div>
-                <div class="footer-section">
-                    <h4>Popular Tools</h4>
-                    <ul>
-                        <li><a href="{{ url_for('tool_page', tool_id='merge') }}">Merge PDF</a></li>
-                        <li><a href="{{ url_for('tool_page', tool_id='pdf_to_word') }}">PDF to Word</a></li>
-                        <li><a href="{{ url_for('tool_page', tool_id='compress') }}">Compress PDF</a></li>
-                    </ul>
-                </div>
+    <footer class="footer compact-footer">
+        <div class="container compact-footer-inner">
+            <div class="footer-brand">
+                <img src="{{ url_for('static', filename='images/icon.png') }}" alt="" class="footer-icon">
+                <span>PDFMaster Pro</span>
             </div>
-            <div class="footer-bottom">
-                <p>&copy; 2026 PDFMaster Pro. All rights reserved.</p>
+            <div class="footer-links-inline">
+                <a href="{{ url_for('index') }}#tools">PDF Tools</a>
+                <a href="{{ url_for('index') }}#about">About</a>
+                <a href="{{ url_for('index') }}#contact">Feedback</a>
             </div>
+            <p class="footer-copyright">&copy; 2026 PDFMaster Pro</p>
         </div>
     </footer>
 
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js', v='20260901-ui2') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
