@@ -94,7 +94,8 @@ def handle_edit_metadata(files, output_dir, form_data):
                 writer.add_metadata(updated)
 
         os.makedirs(output_dir, exist_ok=True)
-        output_file = os.path.join(output_dir, "metadata_edited.pdf")
+        filename = "metadata_edited.pdf"
+        output_file = os.path.join(output_dir, filename)
         with open(output_file, "wb") as fh:
             writer.write(fh)
 
@@ -103,10 +104,11 @@ def handle_edit_metadata(files, output_dir, form_data):
         else:
             message = "PDF metadata updated successfully."
 
+        session_id = os.path.basename(output_dir.rstrip(os.sep))
         return {
             "success": True,
-            "output_file": output_file,
-            "filename": "metadata_edited.pdf",
+            "download_url": f"/download/{session_id}/{filename}",
+            "filename": filename,
             "message": message,
         }
     except Exception:
