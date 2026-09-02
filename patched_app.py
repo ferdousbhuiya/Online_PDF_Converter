@@ -2,15 +2,16 @@ import app as original_app
 from flask import Response
 from compare_patch import handle_compare_pdf
 from converter_patch import handle_compress_pdf, handle_pdf_to_ppt
+from fill_pdf_patch import handle_fill_pdf, make_pdf_fields_view
 from frontend_pages import make_home_view, make_tools_view, about_page, contact_page
 from office_patch import make_word_to_pdf_handler
+from signature_patch import handle_sign_pdf
 from production_hardening import (
     make_convert_view,
     make_download_view,
     make_health_view,
     handle_watermark_pdf,
     handle_page_numbers,
-    handle_sign_pdf,
     handle_remove_pages,
     handle_organize_pdf,
     handle_crop_pdf,
@@ -32,11 +33,36 @@ original_app.handle_crop_pdf = handle_crop_pdf
 original_app.handle_ocr_pdf = handle_ocr_pdf
 original_app.handle_html_to_pdf = handle_html_to_pdf
 
+# Add Fill PDF without modifying the large original app module.
+if not any(tool.get('id') == 'fill_pdf' for tool in original_app.TOOLS):
+    original_app.TOOLS.append({
+        'id': 'fill_pdf',
+        'name': 'Fill PDF',
+        'icon': '🖊️',
+        'color': '#2563EB',
+        'description': 'Fill existing interactive form fields in a PDF',
+        'category': 'edit',
+        'input': 'pdf',
+        'multiple': False,
+    })
+
+_original_process_tool = original_app.process_tool
+
+
+def process_tool_with_fill(tool_id, files, output_dir, form_data):
+    if tool_id == 'fill_pdf':
+        return handle_fill_pdf(files, output_dir, form_data)
+    return _original_process_tool(tool_id, files, output_dir, form_data)
+
+
+original_app.process_tool = process_tool_with_fill
+
 # Route-level hardening. Flask registered the original view functions during
 # import, so replace the registered views explicitly.
 original_app.app.view_functions['convert'] = make_convert_view(original_app)
 original_app.app.view_functions['download'] = make_download_view(original_app)
 original_app.app.view_functions['health_check'] = make_health_view(original_app)
+original_app.app.add_url_rule('/pdf-fields', endpoint='pdf_fields', view_func=make_pdf_fields_view(), methods=['POST'])
 
 # UI routes: keep the landing page focused and give each navigation item its own page.
 original_app.app.view_functions['index'] = make_home_view(original_app)
@@ -45,8 +71,6 @@ original_app.app.add_url_rule('/about', endpoint='about_page', view_func=about_p
 original_app.app.add_url_rule('/contact', endpoint='contact_page', view_func=contact_page)
 
 # Search-engine discovery routes.
-# These explicit routes must be registered after importing the original app so
-# /robots.txt and /sitemap.xml are not handled by the application's generic route.
 def robots_txt():
     body = "User-agent: *\nAllow: /\n\nSitemap: https://bhuiyapdf.ferdous.us/sitemap.xml\n"
     return Response(body, mimetype='text/plain')
