@@ -81,6 +81,56 @@
                     <div class="option-group"><label>Author</label><input type="text" name="author" class="form-control" placeholder="Document author"></div>
                     <div class="option-group"><label>Subject</label><input type="text" name="subject" class="form-control" placeholder="Document subject"></div>
                     <div class="option-group"><label>Keywords</label><input type="text" name="keywords" class="form-control" placeholder="keyword1, keyword2"></div>
+                    {% elif tool.id == 'pdf_to_ppt' %}
+                    <div class="ai-ppt-options">
+                        <div class="info-box ai-ppt-info">
+                            <strong>AI Presentation</strong>
+                            <p>Groq reads the PDF content, identifies the important ideas, creates logical slide divisions and generates an editable PowerPoint deck. Preserve Layout is still available when you need page-by-page fidelity.</p>
+                        </div>
+                        <div class="option-group">
+                            <label>Conversion Mode</label>
+                            <select name="ppt_mode" class="form-control">
+                                <option value="ai" selected>AI Presentation — recommended</option>
+                                <option value="preserve">Preserve PDF Layout</option>
+                            </select>
+                        </div>
+                        <div class="signature-two-col">
+                            <div class="option-group">
+                                <label>Presentation Length</label>
+                                <select name="ppt_length" class="form-control">
+                                    <option value="short">Short</option>
+                                    <option value="standard" selected>Standard</option>
+                                    <option value="detailed">Detailed</option>
+                                </select>
+                            </div>
+                            <div class="option-group">
+                                <label>Presentation Style</label>
+                                <select name="ppt_style" class="form-control">
+                                    <option value="professional" selected>Professional</option>
+                                    <option value="academic">Academic</option>
+                                    <option value="simple">Simple</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="signature-two-col">
+                            <div class="option-group">
+                                <label>Use Source Page Visuals</label>
+                                <select name="ppt_include_images" class="form-control">
+                                    <option value="yes" selected>Yes</option>
+                                    <option value="no">No</option>
+                                </select>
+                                <small>AI slides remain editable; selected source pages may appear as supporting visuals.</small>
+                            </div>
+                            <div class="option-group">
+                                <label>Include Useful Tables</label>
+                                <select name="ppt_include_tables" class="form-control">
+                                    <option value="yes" selected>Yes</option>
+                                    <option value="no">No</option>
+                                </select>
+                                <small>Tables are recreated as editable PowerPoint tables when AI identifies useful data.</small>
+                            </div>
+                        </div>
+                    </div>
                     {% elif tool.id == 'sign' %}
                     <div class="option-group">
                         <label>Signature Type</label>
