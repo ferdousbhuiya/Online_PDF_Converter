@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="PDF document tools base"
-LABEL org.opencontainers.image.description="Reusable Python base with LibreOffice, Poppler, Tesseract, Ghostscript and Office-compatible fonts"
+LABEL org.opencontainers.image.description="Reusable Python base with LibreOffice, Poppler, Tesseract, Ghostscript and multilingual Office-compatible fonts"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer \
@@ -20,6 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     fonts-crosextra-carlito \
     fonts-crosextra-caladea \
+    fonts-noto-core \
+    fonts-lohit-beng-bengali \
     && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
