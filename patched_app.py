@@ -25,8 +25,8 @@ from ai_assistant_patch import make_ai_ask_view
 from frontend_pages import make_home_view, make_tools_view, about_page, contact_page
 from office_matrix_fidelity_patch import make_word_to_pdf_handler
 from signature_patch import handle_sign_pdf
+from final_hardening_patch import make_secure_convert_view, wrap_ai_view, install_global_hardening
 from production_hardening import (
-    make_convert_view,
     make_download_view,
     make_health_view,
     handle_watermark_pdf,
@@ -82,12 +82,12 @@ original_app.process_tool = process_tool_with_fill
 
 # Route-level hardening. Flask registered the original view functions during
 # import, so replace the registered views explicitly.
-original_app.app.view_functions['convert'] = make_convert_view(original_app)
+original_app.app.view_functions['convert'] = make_secure_convert_view(original_app)
 original_app.app.view_functions['download'] = make_download_view(original_app)
 original_app.app.view_functions['health_check'] = make_health_view(original_app)
 original_app.app.add_url_rule('/pdf-fields', endpoint='pdf_fields', view_func=make_pdf_fields_view(), methods=['POST'])
 original_app.app.add_url_rule('/pdf-metadata', endpoint='pdf_metadata', view_func=make_pdf_metadata_view(), methods=['POST'])
-original_app.app.add_url_rule('/ai/ask', endpoint='ai_ask', view_func=make_ai_ask_view(), methods=['POST'])
+original_app.app.add_url_rule('/ai/ask', endpoint='ai_ask', view_func=wrap_ai_view(make_ai_ask_view()), methods=['POST'])
 
 # UI routes: keep the landing page focused and give each navigation item its own page.
 original_app.app.view_functions['index'] = make_home_view(original_app)
@@ -115,5 +115,8 @@ def sitemap_xml():
 
 original_app.app.add_url_rule('/robots.txt', endpoint='robots_txt', view_func=robots_txt)
 original_app.app.add_url_rule('/sitemap.xml', endpoint='sitemap_xml', view_func=sitemap_xml)
+
+# Install final application-wide security headers and generic error handling.
+install_global_hardening(original_app.app)
 
 app = original_app.app
