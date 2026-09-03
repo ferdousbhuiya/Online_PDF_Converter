@@ -39,3 +39,10 @@ jobs:
             ghcr.io/ferdousbhuiya/pdf-doc-tools-base:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Verify anonymous pull access
+        run: |
+          docker logout ghcr.io || true
+          docker image rm ghcr.io/ferdousbhuiya/pdf-doc-tools-base:py311 || true
+          docker pull ghcr.io/ferdousbhuiya/pdf-doc-tools-base:py311
+          docker run --rm ghcr.io/ferdousbhuiya/pdf-doc-tools-base:py311 sh -lc 'python --version && libreoffice --version && pdftoppm -v 2>&1 | head -1 && tesseract --version | head -1 && gs --version && latex --version | head -1 && dvipng --version | head -1'
