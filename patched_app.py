@@ -23,7 +23,7 @@ from fill_pdf_patch import handle_fill_pdf, make_pdf_fields_view
 from metadata_patch import handle_edit_metadata, make_pdf_metadata_view
 from ai_assistant_patch import make_ai_ask_view
 from frontend_pages import make_home_view, make_tools_view, about_page, contact_page
-from office_patch import make_word_to_pdf_handler
+from office_equation_quality_patch import make_word_to_pdf_handler
 from signature_patch import handle_sign_pdf
 from production_hardening import (
     make_convert_view,
@@ -103,7 +103,7 @@ def robots_txt():
 
 def sitemap_xml():
     body = """<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/sitemap/0.9">
   <url><loc>https://bhuiyapdf.ferdous.us/</loc></url>
   <url><loc>https://bhuiyapdf.ferdous.us/tools</loc></url>
   <url><loc>https://bhuiyapdf.ferdous.us/about</loc></url>
