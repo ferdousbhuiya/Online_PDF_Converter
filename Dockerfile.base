@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="PDF document tools base"
-LABEL org.opencontainers.image.description="Reusable Python base with LibreOffice, Poppler, Tesseract, Ghostscript and multilingual Office/math-compatible fonts"
+LABEL org.opencontainers.image.description="Reusable Python base with LibreOffice, Poppler, Tesseract, Ghostscript, LaTeX equation rendering and multilingual Office/math-compatible fonts"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer \
@@ -26,6 +26,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-texgyre \
     fonts-texgyre-math \
     fonts-lmodern \
+    texlive-latex-base \
+    texlive-latex-recommended \
+    texlive-fonts-recommended \
+    dvipng \
     && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
