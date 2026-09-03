@@ -1,42 +1,9 @@
-FROM python:3.11
-
-# System tools required by document conversion, PDF rendering, OCR and compression.
-# Carlito/Caladea improve Microsoft Office layout fidelity (Calibri/Cambria substitutes).
-# Noto/Lohit Bengali provide reliable Bengali glyph coverage for LibreOffice conversions.
-# STIX/TeX Gyre/Latin Modern plus LaTeX/dvipng render Word OMML equations reliably
-# before LibreOffice conversion, preserving fractions, matrices and control-system math.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libreoffice-writer \
-    libreoffice-calc \
-    libreoffice-impress \
-    poppler-utils \
-    tesseract-ocr \
-    tesseract-ocr-eng \
-    tesseract-ocr-fra \
-    tesseract-ocr-deu \
-    tesseract-ocr-spa \
-    tesseract-ocr-ita \
-    ghostscript \
-    fontconfig \
-    fonts-liberation \
-    fonts-dejavu-core \
-    fonts-crosextra-carlito \
-    fonts-crosextra-caladea \
-    fonts-noto-core \
-    fonts-lohit-beng-bengali \
-    fonts-stix \
-    fonts-texgyre \
-    fonts-texgyre-math \
-    fonts-lmodern \
-    texlive-latex-base \
-    texlive-latex-recommended \
-    texlive-fonts-recommended \
-    dvipng \
-    && fc-cache -f \
-    && rm -rf /var/lib/apt/lists/*
+FROM ghcr.io/ferdousbhuiya/pdf-doc-tools-base:py311
 
 WORKDIR /app
 
+# Application-specific Python dependencies remain in the app layer so normal
+# code deployments do not rebuild LibreOffice, OCR, Ghostscript, fonts or LaTeX.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
