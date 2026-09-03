@@ -4,9 +4,8 @@ LABEL org.opencontainers.image.title="PDF document tools base"
 LABEL org.opencontainers.image.description="Reusable Python base with LibreOffice, Poppler, Tesseract, Ghostscript, LaTeX equation rendering, Python native-build dependencies and multilingual Office/math-compatible fonts"
 
 # Document-processing runtime plus the native build toolchain required by Python
-# packages such as pycairo (pulled by xhtml2pdf/reportlab extras). Keeping these
-# in the reusable image prevents every Coolify deployment from rebuilding or
-# failing on the same system prerequisites.
+# packages such as pycairo (pulled by xhtml2pdf/reportlab extras). curl/wget are
+# included because Coolify's Docker healthcheck uses them to probe the app.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer \
     libreoffice-calc \
@@ -38,6 +37,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libcairo2-dev \
     libffi-dev \
+    curl \
+    wget \
     && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
