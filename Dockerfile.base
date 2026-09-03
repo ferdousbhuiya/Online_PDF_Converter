@@ -1,8 +1,12 @@
 FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="PDF document tools base"
-LABEL org.opencontainers.image.description="Reusable Python base with LibreOffice, Poppler, Tesseract, Ghostscript, LaTeX equation rendering and multilingual Office/math-compatible fonts"
+LABEL org.opencontainers.image.description="Reusable Python base with LibreOffice, Poppler, Tesseract, Ghostscript, LaTeX equation rendering, Python native-build dependencies and multilingual Office/math-compatible fonts"
 
+# Document-processing runtime plus the native build toolchain required by Python
+# packages such as pycairo (pulled by xhtml2pdf/reportlab extras). Keeping these
+# in the reusable image prevents every Coolify deployment from rebuilding or
+# failing on the same system prerequisites.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer \
     libreoffice-calc \
@@ -30,6 +34,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-latex-recommended \
     texlive-fonts-recommended \
     dvipng \
+    build-essential \
+    pkg-config \
+    libcairo2-dev \
+    libffi-dev \
     && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
